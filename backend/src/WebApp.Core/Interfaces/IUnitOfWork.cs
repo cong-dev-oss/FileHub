@@ -4,6 +4,7 @@ public interface IUnitOfWork : IDisposable
 {
     IRepository<Entities.User> Users { get; }
     IRepository<Entities.FileMetadata> Files { get; }
+    IRepository<Entities.Folder> Folders { get; }
     IRepository<Entities.Content> Contents { get; }
     IRepository<Entities.ContentFile> ContentFiles { get; }
     
@@ -12,6 +13,3 @@ public interface IUnitOfWork : IDisposable
     Task CommitTransactionAsync();
     Task RollbackTransactionAsync();
 }
-
-
-

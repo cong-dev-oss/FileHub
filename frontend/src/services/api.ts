@@ -1,11 +1,35 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
 
+// Use direct backend URL in development if proxy doesn't work
+// Option 1: Set VITE_API_URL in .env file: VITE_API_URL=http://localhost:5000/api
+// Option 2: Uncomment the line below to use direct backend URL
+const USE_DIRECT_BACKEND = false // Set to true if proxy doesn't work
+
+const getBaseURL = () => {
+  // Check if VITE_API_URL is set in environment
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL
+  }
+  
+  // Use direct backend URL if enabled
+  if (USE_DIRECT_BACKEND && import.meta.env.DEV) {
+    return 'http://localhost:5000/api'
+  }
+  
+  // In development, try proxy first
+  if (import.meta.env.DEV) {
+    return '/api'
+  }
+  
+  return '/api'
+}
+
 const api = axios.create({
-  baseURL: '/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: getBaseURL(),
+  timeout: 600000, // 10 minutes for large file uploads
+  maxContentLength: Infinity,
+  maxBodyLength: Infinity,
 })
 
 // Request interceptor to add token
@@ -15,6 +39,16 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    
+    // Don't set Content-Type for FormData - let axios handle it automatically with boundary
+    if (config.data instanceof FormData) {
+      // Remove Content-Type header completely so axios can set it with proper boundary
+      delete config.headers['Content-Type']
+    } else if (!config.headers['Content-Type']) {
+      // Only set Content-Type for non-FormData requests
+      config.headers['Content-Type'] = 'application/json'
+    }
+    
     return config
   },
   (error) => {

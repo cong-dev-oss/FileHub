@@ -12,6 +12,7 @@ public class ApplicationDbContext : IdentityDbContext<User>
     }
 
     public DbSet<FileMetadata> Files { get; set; }
+    public DbSet<Folder> Folders { get; set; }
     public DbSet<Content> Contents { get; set; }
     public DbSet<ContentFile> ContentFiles { get; set; }
 
@@ -33,6 +34,31 @@ public class ApplicationDbContext : IdentityDbContext<User>
             entity.Property(e => e.ContentType).IsRequired().HasMaxLength(100);
             entity.HasIndex(e => e.UserId);
             entity.HasIndex(e => e.FileType);
+
+            entity.HasOne(e => e.Folder)
+                .WithMany(f => f.Files)
+                .HasForeignKey(e => e.FolderId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Folder configuration
+        builder.Entity<Folder>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
+            
+            // Unique constraint: same name cannot exist in same parent folder for same user
+            entity.HasIndex(e => new { e.UserId, e.ParentId, e.Name })
+                .IsUnique()
+                .HasFilter("[IsDeleted] = 0");
+
+            entity.HasOne(e => e.Parent)
+                .WithMany(f => f.Children)
+                .HasForeignKey(e => e.ParentId)
+                .OnDelete(DeleteBehavior.Restrict); // Use Restrict to avoid cascade path issues
+
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.IsDeleted);
         });
 
         // Content configuration

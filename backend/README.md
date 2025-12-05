@@ -61,6 +61,18 @@ dotnet ef migrations add InitialCreate
 dotnet ef database update
 ```
 
+Hoặc nếu đã có migrations, chỉ cần update database:
+```bash
+cd src/WebApp.API
+dotnet ef database update
+```
+
+**Lưu ý**: Nếu bạn đã thêm chức năng Folder Management, hãy chạy migration:
+```bash
+cd src/WebApp.API
+dotnet ef database update
+```
+
 Hoặc nếu chưa có migrations, database sẽ được tạo tự động khi chạy ứng dụng.
 
 4. Chạy ứng dụng:
@@ -87,11 +99,19 @@ docker-compose up -d
 - `GET /api/auth/me` - Lấy thông tin user hiện tại
 
 ### Files
-- `POST /api/files/upload` - Upload file
-- `GET /api/files` - Lấy danh sách files
+- `POST /api/files/upload` - Upload file (có thể chỉ định folderId)
+- `GET /api/files?fileType=&folderId=` - Lấy danh sách files (có thể filter theo folder)
 - `GET /api/files/{id}` - Lấy thông tin file
 - `GET /api/files/{id}/download` - Download file
+- `POST /api/files/{id}/move` - Di chuyển file vào folder khác
 - `DELETE /api/files/{id}` - Xóa file
+
+### Folders
+- `GET /api/folders/tree` - Lấy cây thư mục của user
+- `GET /api/folders?parentId=` - Lấy danh sách folder con
+- `POST /api/folders` - Tạo folder mới
+- `PUT /api/folders/{id}` - Cập nhật folder (đổi tên/di chuyển)
+- `DELETE /api/folders/{id}` - Xóa folder
 
 ### Content
 - `GET /api/content` - Lấy danh sách content

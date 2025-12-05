@@ -18,6 +18,9 @@ public class FileMetadata
     // Navigation properties
     public virtual User? User { get; set; }
     public string? UserId { get; set; }
+
+    public Guid? FolderId { get; set; }
+    public virtual Folder? Folder { get; set; }
 }
 
 public enum FileType

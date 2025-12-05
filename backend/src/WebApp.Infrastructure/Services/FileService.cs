@@ -10,7 +10,7 @@ public class FileService : IFileService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IWebHostEnvironment _environment;
     private readonly string _uploadsPath;
-    private const long MaxFileSize = 500 * 1024 * 1024; // 500MB
+    private const long MaxFileSize = 5L * 1024 * 1024 * 1024; // 5GB
 
     private static readonly Dictionary<string, FileType> ContentTypeMap = new()
     {
@@ -87,12 +87,13 @@ public class FileService : IFileService
 
         if (fileSize > MaxFileSize)
         {
-            throw new ArgumentException($"File size exceeds maximum allowed size of {MaxFileSize / (1024 * 1024)}MB");
+            throw new ArgumentException($"File size exceeds maximum allowed size of {MaxFileSize / (1024L * 1024 * 1024)}GB");
         }
 
-        using (var fileStreamWriter = new FileStream(filePath, FileMode.Create))
+        // Use buffered stream for better performance with large files
+        using (var fileStreamWriter = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
         {
-            await fileStream.CopyToAsync(fileStreamWriter);
+            await fileStream.CopyToAsync(fileStreamWriter, 81920); // 80KB buffer for better performance
         }
 
         var fileMetadata = new FileMetadata

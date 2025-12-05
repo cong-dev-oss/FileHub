@@ -278,6 +278,9 @@ namespace WebApp.Infrastructure.Migrations
                     b.Property<int>("FileType")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("FolderId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -296,9 +299,52 @@ namespace WebApp.Infrastructure.Migrations
 
                     b.HasIndex("FileType");
 
+                    b.HasIndex("FolderId");
+
                     b.HasIndex("UserId");
 
                     b.ToTable("Files");
+                });
+
+            modelBuilder.Entity("WebApp.Core.Entities.Folder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("ParentId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "ParentId", "Name")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("Folders");
                 });
 
             modelBuilder.Entity("WebApp.Core.Entities.Permission", b =>
@@ -530,9 +576,32 @@ namespace WebApp.Infrastructure.Migrations
 
             modelBuilder.Entity("WebApp.Core.Entities.FileMetadata", b =>
                 {
+                    b.HasOne("WebApp.Core.Entities.Folder", "Folder")
+                        .WithMany("Files")
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("WebApp.Core.Entities.User", "User")
                         .WithMany("Files")
                         .HasForeignKey("UserId");
+
+                    b.Navigation("Folder");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("WebApp.Core.Entities.Folder", b =>
+                {
+                    b.HasOne("WebApp.Core.Entities.Folder", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("WebApp.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
+                    b.Navigation("Parent");
 
                     b.Navigation("User");
                 });
@@ -551,6 +620,13 @@ namespace WebApp.Infrastructure.Migrations
             modelBuilder.Entity("WebApp.Core.Entities.Content", b =>
                 {
                     b.Navigation("ContentFiles");
+                });
+
+            modelBuilder.Entity("WebApp.Core.Entities.Folder", b =>
+                {
+                    b.Navigation("Children");
+
+                    b.Navigation("Files");
                 });
 
             modelBuilder.Entity("WebApp.Core.Entities.User", b =>

@@ -19,6 +19,7 @@ public class FileResponseDto
     public string? Description { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? DownloadUrl { get; set; }
+    public Guid? FolderId { get; set; }
 }
 
 

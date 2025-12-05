@@ -14,12 +14,14 @@ public class UnitOfWork : IUnitOfWork
         _context = context;
         Users = new Repository<Core.Entities.User>(_context);
         Files = new Repository<Core.Entities.FileMetadata>(_context);
+        Folders = new Repository<Core.Entities.Folder>(_context);
         Contents = new Repository<Core.Entities.Content>(_context);
         ContentFiles = new Repository<Core.Entities.ContentFile>(_context);
     }
 
     public IRepository<Core.Entities.User> Users { get; }
     public IRepository<Core.Entities.FileMetadata> Files { get; }
+    public IRepository<Core.Entities.Folder> Folders { get; }
     public IRepository<Core.Entities.Content> Contents { get; }
     public IRepository<Core.Entities.ContentFile> ContentFiles { get; }
 
