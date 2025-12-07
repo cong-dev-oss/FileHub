@@ -137,18 +137,7 @@ export default function Files() {
       if (uploadedFile.fileType === 'Video') {
         try {
           await videoConversionService.startConversion(uploadedFile.id)
-          toast.info('Video conversion started in background')
-        } catch (error: any) {
-          console.error('Failed to start conversion:', error)
-          // Don't show error toast - conversion is optional
-        }
-      }
-      
-      // Auto-start conversion for video files
-      if (file.fileType === 'Video') {
-        try {
-          await videoConversionService.startConversion(file.id)
-          toast.info('Video conversion started in background')
+          toast.success('Video conversion started in background')
         } catch (error: any) {
           console.error('Failed to start conversion:', error)
           // Don't show error toast - conversion is optional
