@@ -7,6 +7,7 @@ public interface IUnitOfWork : IDisposable
     IRepository<Entities.Folder> Folders { get; }
     IRepository<Entities.Content> Contents { get; }
     IRepository<Entities.ContentFile> ContentFiles { get; }
+    IRepository<Entities.VideoConversionJob> VideoConversionJobs { get; }
     
     Task<int> SaveChangesAsync();
     Task BeginTransactionAsync();

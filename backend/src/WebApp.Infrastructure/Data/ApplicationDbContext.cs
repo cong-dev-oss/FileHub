@@ -15,6 +15,7 @@ public class ApplicationDbContext : IdentityDbContext<User>
     public DbSet<Folder> Folders { get; set; }
     public DbSet<Content> Contents { get; set; }
     public DbSet<ContentFile> ContentFiles { get; set; }
+    public DbSet<VideoConversionJob> VideoConversionJobs { get; set; }
 
     // RBAC
     public DbSet<Permission> Permissions { get; set; }
@@ -110,6 +111,28 @@ public class ApplicationDbContext : IdentityDbContext<User>
                 .WithMany()
                 .HasForeignKey(e => e.PermissionId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // VideoConversionJob configuration
+        builder.Entity<VideoConversionJob>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).IsRequired();
+            entity.Property(e => e.Progress).HasDefaultValue(0);
+            entity.HasIndex(e => e.FileId);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.CreatedAt);
+
+            entity.HasOne(e => e.File)
+                .WithMany()
+                .HasForeignKey(e => e.FileId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

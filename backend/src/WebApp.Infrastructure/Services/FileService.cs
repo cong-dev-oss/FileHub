@@ -28,13 +28,17 @@ public class FileService : IFileService
         { "application/vnd.ms-excel.sheet.macroEnabled.12", FileType.Spreadsheet },
         { "text/csv", FileType.Spreadsheet },
         
-        // Videos
+        // Videos - Common formats
         { "video/mp4", FileType.Video },
         { "video/mpeg", FileType.Video },
-        { "video/quicktime", FileType.Video },
-        { "video/x-msvideo", FileType.Video },
-        { "video/x-ms-wmv", FileType.Video },
+        { "video/quicktime", FileType.Video }, // .mov files
+        { "video/x-msvideo", FileType.Video }, // .avi files
+        { "video/x-ms-wmv", FileType.Video }, // .wmv files
         { "video/webm", FileType.Video },
+        { "video/x-matroska", FileType.Video }, // .mkv files
+        { "video/x-flv", FileType.Video }, // .flv files
+        { "video/3gpp", FileType.Video }, // .3gp files
+        { "video/x-ms-asf", FileType.Video }, // .asf files
         
         // Images
         { "image/jpeg", FileType.Image },

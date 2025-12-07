@@ -19,3 +19,4 @@ public class Folder
     public virtual ICollection<FileMetadata> Files { get; set; } = new List<FileMetadata>();
 }
 
+

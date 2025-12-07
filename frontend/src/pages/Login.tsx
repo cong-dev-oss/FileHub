@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form'
 import { useAuthStore } from '../store/authStore'
 import { authService } from '../services/authService'
 import toast from 'react-hot-toast'
-import { LogIn } from 'lucide-react'
+import { LogIn, FolderOpen } from 'lucide-react'
 import FormField from '../components/FormField'
 
 interface LoginForm {
@@ -44,12 +44,15 @@ export default function Login() {
       <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
         <div className="flex items-center justify-center mb-6">
           <div className="bg-primary-100 p-3 rounded-full">
-            <LogIn className="h-8 w-8 text-primary-600" />
+            <FolderOpen className="h-8 w-8 text-primary-600" />
           </div>
         </div>
-        <h2 className="text-2xl font-bold text-center text-gray-900 mb-8">
-          WebApp CMS
-        </h2>
+        <div className="flex items-center justify-center space-x-2 mb-8">
+          <FolderOpen className="h-6 w-6 text-primary-600" />
+          <h2 className="text-2xl font-bold text-center text-gray-900">
+            File Hub
+          </h2>
+        </div>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <FormField
             name="email"

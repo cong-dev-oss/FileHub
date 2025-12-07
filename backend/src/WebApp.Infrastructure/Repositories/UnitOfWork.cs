@@ -17,6 +17,7 @@ public class UnitOfWork : IUnitOfWork
         Folders = new Repository<Core.Entities.Folder>(_context);
         Contents = new Repository<Core.Entities.Content>(_context);
         ContentFiles = new Repository<Core.Entities.ContentFile>(_context);
+        VideoConversionJobs = new Repository<Core.Entities.VideoConversionJob>(_context);
     }
 
     public IRepository<Core.Entities.User> Users { get; }
@@ -24,6 +25,7 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<Core.Entities.Folder> Folders { get; }
     public IRepository<Core.Entities.Content> Contents { get; }
     public IRepository<Core.Entities.ContentFile> ContentFiles { get; }
+    public IRepository<Core.Entities.VideoConversionJob> VideoConversionJobs { get; }
 
     public async Task<int> SaveChangesAsync()
     {

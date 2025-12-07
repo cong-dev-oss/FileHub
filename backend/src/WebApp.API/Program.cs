@@ -104,7 +104,7 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// CORS configuration
+// CORS configuration - Allow video streaming
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
@@ -120,6 +120,12 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IFileService, FileService>();
 
+// SignalR for WebSocket notifications
+builder.Services.AddSignalR();
+
+// Background Service for Video Conversion
+builder.Services.AddHostedService<WebApp.Infrastructure.Services.VideoConversionService>();
+
 // File upload configuration - Support up to 5GB files
 builder.Services.Configure<FormOptions>(options =>
 {
@@ -129,13 +135,20 @@ builder.Services.Configure<FormOptions>(options =>
     options.MemoryBufferThreshold = int.MaxValue;
 });
 
-// Increase Kestrel limits for large file uploads (up to 5GB)
-builder.WebHost.ConfigureKestrel(serverOptions =>
-{
-    serverOptions.Limits.MaxRequestBodySize = 5L * 1024 * 1024 * 1024; // 5GB
-    serverOptions.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(30);
-    serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(5);
-});
+       // Increase Kestrel limits for large file uploads and streaming (up to 5GB)
+       builder.WebHost.ConfigureKestrel(serverOptions =>
+       {
+           serverOptions.Limits.MaxRequestBodySize = 5L * 1024 * 1024 * 1024; // 5GB
+           serverOptions.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(30);
+           serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(5);
+           // Tối ưu cho streaming: tăng max response buffer
+           serverOptions.Limits.MaxResponseBufferSize = 10 * 1024 * 1024; // 10MB response buffer
+           // Tăng min response data rate để streaming mượt hơn
+           serverOptions.Limits.MinResponseDataRate = new Microsoft.AspNetCore.Server.Kestrel.Core.MinDataRate(
+               bytesPerSecond: 1024 * 1024, // 1MB/s minimum
+               gracePeriod: TimeSpan.FromSeconds(10)
+           );
+       });
 
 var app = builder.Build();
 
@@ -152,6 +165,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// SignalR Hub for WebSocket notifications
+app.MapHub<WebApp.Infrastructure.Hubs.VideoConversionHub>("/hubs/video-conversion");
 
 // Initialize database and seed default data
 _ = Task.Run(async () =>

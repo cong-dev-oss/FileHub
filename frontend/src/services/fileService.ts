@@ -195,6 +195,11 @@ export const fileService = {
   move: async (id: string, folderId?: string): Promise<void> => {
     await api.post(`/files/${id}/move`, { folderId })
   },
+
+  getStreamUrl: (id: string): string => {
+    const baseUrl = api.defaults.baseURL || ''
+    return `${baseUrl}/files/${id}/stream`
+  },
 }
 
 

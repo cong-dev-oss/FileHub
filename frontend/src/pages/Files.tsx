@@ -3,10 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fileService, FileResponse } from '../services/fileService'
 import { tusUploadService, TusUploadProgress } from '../services/tusUploadService'
 import { folderService, FolderDto } from '../services/folderService'
-import { Upload, Trash2, Download, File, Search, Folder, FolderPlus, ChevronRight, ChevronDown, Move, X } from 'lucide-react'
+import { videoConversionService } from '../services/videoConversionService'
+import { Upload, Trash2, Download, File, Search, Folder, FolderPlus, ChevronRight, ChevronDown, Move, X, Play, Image as ImageIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { useConfirm } from '../components/ConfirmDialog'
+import VideoPlayer from '../components/VideoPlayer'
+import VideoConversionManager from '../components/VideoConversionManager'
+import ImagePreview from '../components/ImagePreview'
 
 interface UploadState {
   fileName: string
@@ -25,6 +29,8 @@ export default function Files() {
   const [showNewFolderInput, setShowNewFolderInput] = useState(false)
   const [fileToMove, setFileToMove] = useState<FileResponse | null>(null)
   const [uploadState, setUploadState] = useState<UploadState | null>(null)
+  const [playingVideo, setPlayingVideo] = useState<FileResponse | null>(null)
+  const [previewingImage, setPreviewingImage] = useState<FileResponse | null>(null)
   const queryClient = useQueryClient()
   const confirm = useConfirm()
 
@@ -108,7 +114,7 @@ export default function Files() {
 
     try {
       // Use improved upload service with better timeout and progress tracking
-      await fileService.upload(
+      const uploadedFile = await fileService.upload(
         file,
         undefined,
         selectedFolderId,
@@ -126,6 +132,28 @@ export default function Files() {
       queryClient.invalidateQueries({ queryKey: ['files', selectedFileType, selectedFolderId] })
       setUploadState(null)
       toast.success('File uploaded successfully')
+      
+      // Auto-start conversion for video files
+      if (uploadedFile.fileType === 'Video') {
+        try {
+          await videoConversionService.startConversion(uploadedFile.id)
+          toast.info('Video conversion started in background')
+        } catch (error: any) {
+          console.error('Failed to start conversion:', error)
+          // Don't show error toast - conversion is optional
+        }
+      }
+      
+      // Auto-start conversion for video files
+      if (file.fileType === 'Video') {
+        try {
+          await videoConversionService.startConversion(file.id)
+          toast.info('Video conversion started in background')
+        } catch (error: any) {
+          console.error('Failed to start conversion:', error)
+          // Don't show error toast - conversion is optional
+        }
+      }
     } catch (error: any) {
       console.error('Upload error:', error)
       const errorMessage = error.response?.data?.message || error.message || 'Upload failed'
@@ -370,6 +398,9 @@ export default function Files() {
           </label>
         </div>
 
+        {/* Video Conversion Manager - Only shows when there are active conversions */}
+        <VideoConversionManager />
+
         {/* Upload Progress Bar */}
         {uploadState && uploadState.isUploading && (
           <div className="bg-white p-4 rounded-lg shadow">
@@ -512,6 +543,24 @@ export default function Files() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end space-x-2">
+                          {(file.fileType === 'Video' || file.contentType?.startsWith('video/')) && (
+                            <button
+                              onClick={() => setPlayingVideo(file)}
+                              className="text-red-600 hover:text-red-900 transition-colors"
+                              title="Play video"
+                            >
+                              <Play className="h-5 w-5" />
+                            </button>
+                          )}
+                          {(file.fileType === 'Image' || file.contentType?.startsWith('image/')) && (
+                            <button
+                              onClick={() => setPreviewingImage(file)}
+                              className="text-green-600 hover:text-green-900 transition-colors"
+                              title="Preview image"
+                            >
+                              <ImageIcon className="h-5 w-5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => setFileToMove(file)}
                             className="text-blue-600 hover:text-blue-900 transition-colors"
@@ -552,6 +601,36 @@ export default function Files() {
           )}
         </div>
       </div>
+
+      {/* Video Player Modal */}
+      {playingVideo && (
+        <VideoPlayer
+          videoUrl={fileService.getStreamUrl(playingVideo.id)}
+          fileName={playingVideo.originalFileName}
+          fileId={playingVideo.id}
+          files={filteredFiles}
+          currentIndex={filteredFiles.findIndex(f => f.id === playingVideo.id)}
+          onClose={() => setPlayingVideo(null)}
+          onNavigate={(file) => {
+            setPlayingVideo(file)
+          }}
+        />
+      )}
+
+      {/* Image Preview Modal */}
+      {previewingImage && (
+        <ImagePreview
+          imageUrl={fileService.getStreamUrl(previewingImage.id)}
+          fileName={previewingImage.originalFileName}
+          fileId={previewingImage.id}
+          files={filteredFiles}
+          currentIndex={filteredFiles.findIndex(f => f.id === previewingImage.id)}
+          onClose={() => setPreviewingImage(null)}
+          onNavigate={(file) => {
+            setPreviewingImage(file)
+          }}
+        />
+      )}
     </div>
   )
 }

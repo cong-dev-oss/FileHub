@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using System.Collections.Concurrent;
 using System.IO;
+using Microsoft.Extensions.Configuration;
 using WebApp.Core.DTOs.Files;
 using WebApp.Core.Interfaces;
 
@@ -16,11 +17,13 @@ public class FilesController : ControllerBase
 {
     private readonly IFileService _fileService;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IConfiguration _configuration;
 
-    public FilesController(IFileService fileService, IUnitOfWork unitOfWork)
+    public FilesController(IFileService fileService, IUnitOfWork unitOfWork, IConfiguration configuration)
     {
         _fileService = fileService;
         _unitOfWork = unitOfWork;
+        _configuration = configuration;
     }
 
     [HttpPost("upload")]
@@ -105,6 +108,172 @@ public class FilesController : ControllerBase
         }
 
         return File(stream, fileMetadata.ContentType, fileMetadata.OriginalFileName);
+    }
+
+    [HttpGet("{id}/stream")]
+    [AllowAnonymous] // Allow anonymous but verify token from query string
+    public async Task<IActionResult> StreamFile(Guid id, [FromQuery] string? token = null)
+    {
+        // Verify token from query string (for video element which can't send headers)
+        if (!string.IsNullOrEmpty(token))
+        {
+            try
+            {
+                var tokenHandler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                var jwtSettings = _configuration.GetSection("JwtSettings");
+                var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not found");
+                
+                var validationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwtSettings["Issuer"] ?? "WebApp",
+                    ValidAudience = jwtSettings["Audience"] ?? "WebAppUsers",
+                    IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(secretKey))
+                };
+
+                var principal = tokenHandler.ValidateToken(token, validationParameters, out _);
+                // Token is valid, continue
+            }
+            catch
+            {
+                // If token validation fails, try Authorization header as fallback
+                if (!User.Identity?.IsAuthenticated ?? true)
+                {
+                    return Unauthorized();
+                }
+            }
+        }
+        else
+        {
+            // No token in query, check Authorization header
+            if (!User.Identity?.IsAuthenticated ?? true)
+            {
+                return Unauthorized();
+            }
+        }
+
+        var fileMetadata = await _fileService.GetFileMetadataAsync(id);
+        if (fileMetadata == null || fileMetadata.IsDeleted)
+        {
+            return NotFound();
+        }
+
+        var filePath = fileMetadata.FilePath;
+        if (!System.IO.File.Exists(filePath))
+        {
+            // Log file not found for debugging
+            Console.WriteLine($"[StreamFile] File not found: {filePath} for fileId: {id}");
+            return NotFound();
+        }
+
+        // Log streaming request for debugging
+        Console.WriteLine($"[StreamFile] Streaming file: {fileMetadata.OriginalFileName} (ID: {id}), ContentType: {fileMetadata.ContentType}, Size: {fileMetadata.FileSize} bytes");
+
+        var fileInfo = new FileInfo(filePath);
+        var fileLength = fileInfo.Length;
+
+        // Support Range requests for video streaming (HTTP 206 Partial Content)
+        var rangeHeader = Request.Headers["Range"].ToString();
+        if (!string.IsNullOrEmpty(rangeHeader) && rangeHeader.StartsWith("bytes="))
+        {
+            var ranges = rangeHeader.Replace("bytes=", "").Split('-');
+            long start = 0;
+            long end = fileLength - 1;
+
+            if (ranges.Length > 0 && long.TryParse(ranges[0], out var startRange))
+            {
+                start = startRange;
+            }
+
+            if (ranges.Length > 1 && !string.IsNullOrEmpty(ranges[1]) && long.TryParse(ranges[1], out var endRange))
+            {
+                end = endRange;
+            }
+
+            // Ensure valid range
+            if (start > end || start < 0 || end >= fileLength)
+            {
+                Console.WriteLine($"[StreamFile] Invalid range: start={start}, end={end}, fileLength={fileLength}");
+                return StatusCode(416, new { message = "Range Not Satisfiable" });
+            }
+
+            Console.WriteLine($"[StreamFile] Range request: bytes {start}-{end}/{fileLength}");
+
+            var contentLength = end - start + 1;
+            
+            Response.StatusCode = 206; // Partial Content
+            Response.Headers.Append("Content-Range", $"bytes {start}-{end}/{fileLength}");
+            Response.Headers.Append("Accept-Ranges", "bytes");
+            Response.Headers.Append("Content-Length", contentLength.ToString());
+            Response.ContentType = fileMetadata.ContentType;
+            Response.Headers.Append("Cache-Control", "public, max-age=3600"); // Cache for 1 hour
+            Response.Headers.Append("Access-Control-Allow-Origin", "*"); // Allow CORS for video streaming
+            Response.Headers.Append("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length"); // Expose headers for Range requests
+
+            // Tối ưu buffer size cho streaming: 2MB buffer để tăng tốc độ đọc
+            // Buffer lớn hơn = ít I/O operations hơn = nhanh hơn
+            const int STREAM_BUFFER_SIZE = 2 * 1024 * 1024; // 2MB buffer
+            var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, STREAM_BUFFER_SIZE, useAsync: true);
+            fileStream.Seek(start, SeekOrigin.Begin);
+
+            return new FileStreamResult(fileStream, fileMetadata.ContentType)
+            {
+                EnableRangeProcessing = false // We handle range manually
+            };
+        }
+
+        // No Range request - For large video files, return first chunk only to avoid Content-Length mismatch
+        // Browser will then send Range requests for the rest
+        // For small files, return full file with chunked encoding
+        
+        const long LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10MB
+        
+        if (fileLength > LARGE_FILE_THRESHOLD)
+        {
+            // For large files, return first 2MB only - browser will request more with Range headers
+            long start = 0;
+            long end = Math.Min(2 * 1024 * 1024 - 1, fileLength - 1); // First 2MB
+            var contentLength = end - start + 1;
+            
+            Response.StatusCode = 206; // Partial Content
+            Response.Headers.Append("Content-Range", $"bytes {start}-{end}/{fileLength}");
+            Response.Headers.Append("Accept-Ranges", "bytes");
+            Response.Headers.Append("Content-Length", contentLength.ToString());
+            Response.ContentType = fileMetadata.ContentType;
+            Response.Headers.Append("Cache-Control", "public, max-age=3600");
+            Response.Headers.Append("Access-Control-Allow-Origin", "*");
+            Response.Headers.Append("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
+            
+            const int STREAM_BUFFER_SIZE = 2 * 1024 * 1024; // 2MB buffer
+            var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, STREAM_BUFFER_SIZE, useAsync: true);
+            fileStream.Seek(start, SeekOrigin.Begin);
+            
+            return new FileStreamResult(fileStream, fileMetadata.ContentType)
+            {
+                EnableRangeProcessing = false
+            };
+        }
+        else
+        {
+            // For small files, return full file - browser can handle it
+            Response.Headers.Append("Accept-Ranges", "bytes");
+            Response.Headers.Append("Content-Length", fileLength.ToString());
+            Response.ContentType = fileMetadata.ContentType;
+            Response.Headers.Append("Cache-Control", "public, max-age=3600");
+            Response.Headers.Append("Access-Control-Allow-Origin", "*");
+            Response.Headers.Append("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
+            
+            const int FULL_STREAM_BUFFER_SIZE = 4 * 1024 * 1024; // 4MB buffer
+            var fullFileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, FULL_STREAM_BUFFER_SIZE, useAsync: true);
+            
+            return new FileStreamResult(fullFileStream, fileMetadata.ContentType)
+            {
+                EnableRangeProcessing = true // Let ASP.NET Core handle for small files
+            };
+        }
     }
 
     [HttpGet("{id}")]
