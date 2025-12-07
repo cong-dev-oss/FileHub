@@ -219,7 +219,7 @@ export const fileService = {
     }
     
     // Log in development for debugging
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('[getStreamUrl] Generated URL:', url, 'from baseURL:', baseUrl, 'fileId:', id)
     }
     
