@@ -374,6 +374,67 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
     }
   }
 
+  // Lock screen orientation on mobile when fullscreen
+  useEffect(() => {
+    // Check if orientation API is available
+    const orientation = (screen as any).orientation || (screen as any).mozOrientation || (screen as any).msOrientation
+    
+    // Helper function to safely call orientation methods
+    const safeUnlock = () => {
+      if (orientation && typeof orientation.unlock === 'function') {
+        try {
+          const result = orientation.unlock()
+          // Check if result is a Promise before calling catch
+          if (result && typeof result.catch === 'function') {
+            result.catch(() => {
+              // Ignore errors if unlock fails
+            })
+          }
+        } catch (err) {
+          // Ignore errors
+        }
+      }
+    }
+
+    const safeLock = () => {
+      if (orientation && typeof orientation.lock === 'function') {
+        try {
+          const result = orientation.lock('landscape')
+          // Check if result is a Promise before calling catch
+          if (result && typeof result.catch === 'function') {
+            result.catch((err: any) => {
+              // Some browsers/devices don't support orientation lock
+              console.log('Orientation lock not supported:', err)
+            })
+          }
+        } catch (err) {
+          // Ignore errors
+        }
+      }
+    }
+    
+    if (!isFullscreen) {
+      // Unlock orientation when exiting fullscreen
+      safeUnlock()
+      return
+    }
+
+    // Lock to landscape on mobile when entering fullscreen
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768
+    if (isMobile) {
+      safeLock()
+    }
+
+    // Cleanup: unlock when component unmounts or exits fullscreen
+    return () => {
+      safeUnlock()
+      // Remove CSS rotation
+      if (document.documentElement) {
+        document.documentElement.style.removeProperty('--video-fullscreen-rotate')
+      }
+    }
+  }, [isFullscreen])
+
   const toggleFullscreen = () => {
     // Toggle modal fullscreen state (not browser fullscreen)
     setIsFullscreen(!isFullscreen)
@@ -472,29 +533,51 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
           className={`relative bg-black rounded-lg shadow-2xl overflow-hidden transition-all duration-300 ${
             isFullscreen 
               ? 'fixed inset-0 w-screen h-screen rounded-none m-0' 
-              : 'w-full max-w-6xl h-auto max-h-[90vh] aspect-video animate-in fade-in zoom-in-95 duration-300 mx-auto'
+              : 'w-full max-w-6xl h-auto max-h-[90vh] aspect-video animate-in fade-in zoom-in-95 duration-300 mx-auto md:m-4 m-2'
           }`}
+          style={isFullscreen ? {
+            margin: 0,
+            padding: 0,
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 9999
+          } : { minHeight: '400px' }}
           onClick={(e) => {
             e.stopPropagation()
             // Toggle play/pause on video container click
-            if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'VIDEO') {
+            const target = e.target as HTMLElement
+            if (e.target === e.currentTarget || target.tagName === 'VIDEO') {
               togglePlay()
             }
           }}
-          style={isFullscreen ? { margin: 0, padding: 0, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 } : { minHeight: '400px', margin: '1rem auto' }}
+          onTouchStart={() => {
+            // Touch to show/hide controls on mobile
+            setShowControls(true)
+            if (controlsTimeoutRef.current) {
+              clearTimeout(controlsTimeoutRef.current)
+            }
+            if (isPlaying) {
+              controlsTimeoutRef.current = setTimeout(() => {
+                setShowControls(false)
+              }, 3000)
+            }
+          }}
         >
           {/* Header bar - chỉ hiển thị khi không fullscreen */}
           {!isFullscreen && (
-            <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/80 to-transparent px-4 py-3 flex items-center justify-between">
-              <h3 className="text-white font-medium text-sm truncate flex-1 mr-4">
+            <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/80 to-transparent px-3 md:px-4 py-2 md:py-3 flex items-center justify-between">
+              <h3 className="text-white font-medium text-xs md:text-sm truncate flex-1 mr-2 md:mr-4">
                 {fileName}
               </h3>
               <button
                 onClick={onClose}
-                className="text-white/80 hover:text-white hover:bg-white/10 rounded-full p-1.5 transition-colors"
+                className="text-white/80 hover:text-white active:bg-white/20 rounded-full p-2 md:p-1.5 transition-colors touch-manipulation"
                 aria-label="Close"
               >
-                <X size={20} />
+                <X size={18} className="md:w-5 md:h-5" />
               </button>
             </div>
           )}
@@ -503,10 +586,10 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
           {isFullscreen && (
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 z-30 text-white hover:bg-white/20 rounded-full p-2 transition-colors backdrop-blur-sm bg-black/30"
+              className="absolute top-3 right-3 md:top-4 md:right-4 z-30 text-white hover:bg-white/20 active:bg-white/30 rounded-full p-3 md:p-2 transition-colors backdrop-blur-sm bg-black/30 touch-manipulation"
               aria-label="Close"
             >
-              <X size={24} />
+              <X size={20} className="md:w-6 md:h-6" />
             </button>
           )}
 
@@ -514,11 +597,11 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
           {hasPrevious && (
             <button
               onClick={handlePrevious}
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-30 text-white hover:bg-white/20 rounded-full p-2 transition-colors backdrop-blur-sm bg-black/30"
+              className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 z-30 text-white hover:bg-white/20 active:bg-white/30 rounded-full p-3 md:p-2 transition-colors backdrop-blur-sm bg-black/30 touch-manipulation"
               aria-label="Previous video"
               title="Previous video (←)"
             >
-              <ChevronLeft size={24} />
+              <ChevronLeft size={20} className="md:w-6 md:h-6" />
             </button>
           )}
 
@@ -526,11 +609,11 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
           {hasNext && (
             <button
               onClick={handleNext}
-              className="absolute right-4 top-1/2 -translate-y-1/2 z-30 text-white hover:bg-white/20 rounded-full p-2 transition-colors backdrop-blur-sm bg-black/30"
+              className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 z-30 text-white hover:bg-white/20 active:bg-white/30 rounded-full p-3 md:p-2 transition-colors backdrop-blur-sm bg-black/30 touch-manipulation"
               aria-label="Next video"
               title="Next video (→)"
             >
-              <ChevronRight size={24} />
+              <ChevronRight size={20} className="md:w-6 md:h-6" />
             </button>
           )}
 
@@ -759,11 +842,15 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
 
         {/* Progress bar - luôn hiển thị (YouTube-style) */}
         <div
-          className="absolute bottom-0 left-0 right-0 z-30 cursor-pointer group"
+          className="absolute bottom-0 left-0 right-0 z-30 cursor-pointer group touch-manipulation"
           onClick={handleSeek}
+          onTouchStart={(e) => {
+            e.stopPropagation()
+            setShowControls(true)
+          }}
           onMouseEnter={() => setShowControls(true)}
         >
-          <div className="w-full h-1 bg-white/20 group-hover:h-1.5 transition-all">
+          <div className="w-full h-1.5 md:h-1 bg-white/20 group-hover:h-2 md:group-hover:h-1.5 transition-all">
             {/* Buffered progress (gray background) */}
             <div
               className="absolute h-full bg-white/30 transition-all"
@@ -781,46 +868,47 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
 
         {/* Controls overlay - z-index cao hơn loading overlay */}
         <div 
-          className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 z-30 transition-opacity duration-300 ${
+          className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 md:p-4 z-30 transition-opacity duration-300 ${
             !isFullscreen ? 'rounded-b-lg' : ''
           } ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           onMouseEnter={() => setShowControls(true)}
+          onTouchStart={() => setShowControls(true)}
         >
           {/* Control buttons */}
           {showControls && (
-            <div className="flex items-center gap-4 mt-2">
+            <div className="flex items-center gap-2 md:gap-4 mt-2 flex-wrap">
               {/* Play/Pause */}
               <button
                 onClick={togglePlay}
-                className="text-white hover:text-gray-300 transition-colors"
+                className="text-white hover:text-gray-300 active:text-gray-400 transition-colors p-2 md:p-0 touch-manipulation"
                 aria-label={isPlaying ? 'Pause' : 'Play'}
               >
-                {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+                {isPlaying ? <Pause size={28} className="md:w-6 md:h-6" /> : <Play size={28} className="md:w-6 md:h-6" />}
               </button>
 
               {/* Skip backward */}
               <button
                 onClick={() => skip(-10)}
-                className="text-white hover:text-gray-300 transition-colors"
+                className="text-white hover:text-gray-300 active:text-gray-400 transition-colors p-2 md:p-0 touch-manipulation hidden sm:block"
                 aria-label="Skip backward 10 seconds"
               >
-                <SkipBack size={20} />
+                <SkipBack size={22} className="md:w-5 md:h-5" />
               </button>
 
               {/* Skip forward */}
               <button
                 onClick={() => skip(10)}
-                className="text-white hover:text-gray-300 transition-colors"
+                className="text-white hover:text-gray-300 active:text-gray-400 transition-colors p-2 md:p-0 touch-manipulation hidden sm:block"
                 aria-label="Skip forward 10 seconds"
               >
-                <SkipForward size={20} />
+                <SkipForward size={22} className="md:w-5 md:h-5" />
               </button>
 
-              {/* Volume */}
-              <div className="flex items-center gap-2">
+              {/* Volume - ẩn trên mobile nhỏ */}
+              <div className="flex items-center gap-2 hidden md:flex">
                 <button
                   onClick={toggleMute}
-                  className="text-white hover:text-gray-300 transition-colors"
+                  className="text-white hover:text-gray-300 active:text-gray-400 transition-colors touch-manipulation"
                   aria-label={isMuted ? 'Unmute' : 'Mute'}
                 >
                   {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
@@ -837,7 +925,7 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
               </div>
 
               {/* Time, Speed and Buffered Progress - luôn hiển thị khi cần */}
-              <div className="text-white text-sm ml-auto flex items-center gap-3">
+              <div className="text-white text-xs md:text-sm ml-auto flex items-center gap-2 md:gap-3 flex-shrink-0">
                 <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
                 
                 {/* Video counter */}
@@ -865,10 +953,10 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
               {/* Fullscreen */}
               <button
                 onClick={toggleFullscreen}
-                className="text-white hover:text-gray-300 transition-colors"
+                className="text-white hover:text-gray-300 active:text-gray-400 transition-colors p-2 md:p-0 touch-manipulation"
                 aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
               >
-                {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                {isFullscreen ? <Minimize size={22} className="md:w-5 md:h-5" /> : <Maximize size={22} className="md:w-5 md:h-5" />}
               </button>
             </div>
           )}
@@ -878,13 +966,13 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
             {!isPlaying && (
               <button
                 onClick={togglePlay}
-                className={`absolute inset-0 flex items-center justify-center text-white hover:text-gray-300 transition-opacity duration-300 z-10 ${
+                className={`absolute inset-0 flex items-center justify-center text-white hover:text-gray-300 active:text-gray-400 transition-opacity duration-300 z-10 touch-manipulation ${
                   showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'
                 }`}
                 aria-label="Play"
               >
-                <div className="bg-black/50 rounded-full p-6">
-                  <Play size={64} fill="white" />
+                <div className="bg-black/50 rounded-full p-6 md:p-6">
+                  <Play size={56} className="md:w-16 md:h-16" fill="white" />
                 </div>
               </button>
             )}

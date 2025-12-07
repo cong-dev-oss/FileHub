@@ -31,6 +31,7 @@ export default function Files() {
   const [uploadState, setUploadState] = useState<UploadState | null>(null)
   const [playingVideo, setPlayingVideo] = useState<FileResponse | null>(null)
   const [previewingImage, setPreviewingImage] = useState<FileResponse | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const queryClient = useQueryClient()
   const confirm = useConfirm()
 
@@ -293,9 +294,65 @@ export default function Files() {
   }
 
   return (
-    <div className="flex space-x-4">
-      {/* Folder Tree Sidebar */}
-      <div className="w-64 bg-white rounded-lg shadow p-4 flex-shrink-0" style={{ maxHeight: 'calc(100vh - 100px)', overflowY: 'auto', scrollbarWidth: 'thin' }}>
+    <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+      {/* Mobile sidebar toggle button */}
+      <div className="md:hidden flex items-center justify-between bg-white p-3 rounded-lg shadow">
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors touch-manipulation"
+        >
+          <Folder className="h-5 w-5" />
+          <span>Folders</span>
+        </button>
+        <h1 className="text-xl font-bold text-gray-900">Files</h1>
+      </div>
+
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div className="md:hidden fixed inset-0 z-40">
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
+          <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-xl">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-gray-900">Folders</h2>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="text-gray-500 hover:text-gray-700 touch-manipulation p-1"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              {/* Folder tree content - reuse same component */}
+              {foldersLoading ? (
+                <div className="text-sm text-gray-500 py-4">Loading folders...</div>
+              ) : folders.length === 0 ? (
+                <div className="text-sm text-gray-400 py-4 italic">No folders yet</div>
+              ) : (
+                <div className="space-y-0 max-h-[calc(100vh-150px)] overflow-y-auto">
+                  <div
+                    className={`flex items-center py-1.5 px-2 cursor-pointer hover:bg-gray-100 rounded mb-2 transition-colors touch-manipulation ${
+                      selectedFolderId === undefined ? 'bg-blue-100 border-l-2 border-blue-500' : ''
+                    }`}
+                    onClick={() => {
+                      setSelectedFolderId(undefined)
+                      setSidebarOpen(false)
+                    }}
+                  >
+                    <Folder className="h-4 w-4 mr-2 text-blue-500" />
+                    <span className={`text-sm ${selectedFolderId === undefined ? 'font-medium text-blue-900' : 'text-gray-700'}`}>
+                      Root
+                    </span>
+                  </div>
+                  {renderFolderTree(folders)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Folder Tree Sidebar - Desktop */}
+      <div className="hidden md:block w-64 bg-white rounded-lg shadow p-4 flex-shrink-0" style={{ maxHeight: 'calc(100vh - 100px)', overflowY: 'auto', scrollbarWidth: 'thin' }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-gray-900">Folders</h2>
           <button
@@ -367,15 +424,29 @@ export default function Files() {
       </div>
 
       {/* Files List */}
-      <div className="flex-1 space-y-6 min-w-0">
-        <div className="flex items-center justify-between">
+      <div className="flex-1 space-y-4 md:space-y-6 min-w-0">
+        <div className="hidden md:flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Files</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Files</h1>
             <p className="mt-1 text-sm text-gray-500">
               {selectedFolderId ? 'Files in folder' : 'Files in root'}
             </p>
           </div>
-          <label className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 cursor-pointer transition-colors">
+          <label className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 active:bg-primary-800 cursor-pointer transition-colors touch-manipulation">
+            <Upload className="h-5 w-5 mr-2" />
+            Upload File
+            <input
+              type="file"
+              className="hidden"
+              onChange={handleUpload}
+              accept=".doc,.docx,.pdf,.xls,.xlsx,.csv,.mp4,.avi,.mov,.jpg,.jpeg,.png,.gif,.mp3,.wav"
+            />
+          </label>
+        </div>
+        
+        {/* Mobile Upload Button */}
+        <div className="md:hidden">
+          <label className="flex items-center justify-center w-full px-4 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 active:bg-primary-800 cursor-pointer transition-colors touch-manipulation">
             <Upload className="h-5 w-5 mr-2" />
             Upload File
             <input
@@ -421,8 +492,8 @@ export default function Files() {
         )}
 
         {/* Filters */}
-        <div className="bg-white p-4 rounded-lg shadow">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white p-3 md:p-4 rounded-lg shadow">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
@@ -482,111 +553,189 @@ export default function Files() {
           ) : filteredFiles.length === 0 ? (
             <div className="p-8 text-center text-gray-500">No files found</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      File
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Size
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Uploaded
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredFiles.map((file) => (
-                    <tr key={file.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <File className="h-5 w-5 text-gray-400 mr-3" />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {file.originalFileName}
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        File
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Size
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Uploaded
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredFiles.map((file) => (
+                      <tr key={file.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <File className="h-5 w-5 text-gray-400 mr-3" />
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {file.originalFileName}
+                              </div>
+                              {file.description && (
+                                <div className="text-sm text-gray-500">{file.description}</div>
+                              )}
                             </div>
-                            {file.description && (
-                              <div className="text-sm text-gray-500">{file.description}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary-100 text-primary-800">
+                            {file.fileType}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatFileSize(file.fileSize)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {format(new Date(file.createdAt), 'MMM d, yyyy')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end space-x-2">
+                            {(file.fileType === 'Video' || file.contentType?.startsWith('video/')) && (
+                              <button
+                                onClick={() => setPlayingVideo(file)}
+                                className="text-red-600 hover:text-red-900 transition-colors touch-manipulation p-1"
+                                title="Play video"
+                              >
+                                <Play className="h-5 w-5" />
+                              </button>
                             )}
+                            {(file.fileType === 'Image' || file.contentType?.startsWith('image/')) && (
+                              <button
+                                onClick={() => setPreviewingImage(file)}
+                                className="text-green-600 hover:text-green-900 transition-colors touch-manipulation p-1"
+                                title="Preview image"
+                              >
+                                <ImageIcon className="h-5 w-5" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setFileToMove(file)}
+                              className="text-blue-600 hover:text-blue-900 transition-colors touch-manipulation p-1"
+                              title="Move"
+                            >
+                              <Move className="h-5 w-5" />
+                            </button>
+                            <button
+                              onClick={() => handleDownload(file)}
+                              className="text-primary-600 hover:text-primary-900 transition-colors touch-manipulation p-1"
+                              title="Download"
+                            >
+                              <Download className="h-5 w-5" />
+                            </button>
+                            <button
+                              onClick={async () => {
+                                const ok = await confirm({
+                                  title: 'Xóa file',
+                                  message: `Bạn có chắc chắn muốn xóa file "${file.originalFileName}"?`,
+                                  confirmText: 'Xóa file',
+                                })
+                                if (ok) {
+                                  deleteMutation.mutate(file.id)
+                                }
+                              }}
+                              className="text-red-600 hover:text-red-900 transition-colors touch-manipulation p-1"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-5 w-5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="md:hidden divide-y divide-gray-200">
+                {filteredFiles.map((file) => (
+                  <div key={file.id} className="p-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-start flex-1 min-w-0">
+                        <File className="h-5 w-5 text-gray-400 mr-3 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">
+                            {file.originalFileName}
+                          </div>
+                          {file.description && (
+                            <div className="text-xs text-gray-500 mt-1 line-clamp-2">{file.description}</div>
+                          )}
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary-100 text-primary-800">
+                              {file.fileType}
+                            </span>
+                            <span className="text-xs text-gray-500">{formatFileSize(file.fileSize)}</span>
+                            <span className="text-xs text-gray-500">{format(new Date(file.createdAt), 'MMM d, yyyy')}</span>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary-100 text-primary-800">
-                          {file.fileType}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatFileSize(file.fileSize)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {format(new Date(file.createdAt), 'MMM d, yyyy')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end space-x-2">
-                          {(file.fileType === 'Video' || file.contentType?.startsWith('video/')) && (
-                            <button
-                              onClick={() => setPlayingVideo(file)}
-                              className="text-red-600 hover:text-red-900 transition-colors"
-                              title="Play video"
-                            >
-                              <Play className="h-5 w-5" />
-                            </button>
-                          )}
-                          {(file.fileType === 'Image' || file.contentType?.startsWith('image/')) && (
-                            <button
-                              onClick={() => setPreviewingImage(file)}
-                              className="text-green-600 hover:text-green-900 transition-colors"
-                              title="Preview image"
-                            >
-                              <ImageIcon className="h-5 w-5" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setFileToMove(file)}
-                            className="text-blue-600 hover:text-blue-900 transition-colors"
-                            title="Move"
-                          >
-                            <Move className="h-5 w-5" />
-                          </button>
-                          <button
-                            onClick={() => handleDownload(file)}
-                            className="text-primary-600 hover:text-primary-900 transition-colors"
-                            title="Download"
-                          >
-                            <Download className="h-5 w-5" />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              const ok = await confirm({
-                                title: 'Xóa file',
-                                message: `Bạn có chắc chắn muốn xóa file "${file.originalFileName}"?`,
-                                confirmText: 'Xóa file',
-                              })
-                              if (ok) {
-                                deleteMutation.mutate(file.id)
-                              }
-                            }}
-                            className="text-red-600 hover:text-red-900 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-gray-100">
+                      {(file.fileType === 'Video' || file.contentType?.startsWith('video/')) && (
+                        <button
+                          onClick={() => setPlayingVideo(file)}
+                          className="flex items-center gap-1 px-3 py-2 text-red-600 hover:text-red-900 active:bg-red-50 rounded-md transition-colors touch-manipulation"
+                          title="Play video"
+                        >
+                          <Play className="h-4 w-4" />
+                          <span className="text-xs">Play</span>
+                        </button>
+                      )}
+                      {(file.fileType === 'Image' || file.contentType?.startsWith('image/')) && (
+                        <button
+                          onClick={() => setPreviewingImage(file)}
+                          className="flex items-center gap-1 px-3 py-2 text-green-600 hover:text-green-900 active:bg-green-50 rounded-md transition-colors touch-manipulation"
+                          title="Preview image"
+                        >
+                          <ImageIcon className="h-4 w-4" />
+                          <span className="text-xs">View</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDownload(file)}
+                        className="flex items-center gap-1 px-3 py-2 text-primary-600 hover:text-primary-900 active:bg-primary-50 rounded-md transition-colors touch-manipulation"
+                        title="Download"
+                      >
+                        <Download className="h-4 w-4" />
+                        <span className="text-xs">Download</span>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: 'Xóa file',
+                            message: `Bạn có chắc chắn muốn xóa file "${file.originalFileName}"?`,
+                            confirmText: 'Xóa file',
+                          })
+                          if (ok) {
+                            deleteMutation.mutate(file.id)
+                          }
+                        }}
+                        className="flex items-center gap-1 px-3 py-2 text-red-600 hover:text-red-900 active:bg-red-50 rounded-md transition-colors touch-manipulation"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="text-xs">Delete</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
