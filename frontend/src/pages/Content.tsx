@@ -2,16 +2,18 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { contentService, ContentDto } from '../services/contentService'
-import { Plus, Trash2, Edit, Search } from 'lucide-react'
+import { Plus, Trash2, Edit, Search, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { useConfirm } from '../components/ConfirmDialog'
+import ContentDetail from '../components/ContentDetail'
 
 export default function Content() {
   const navigate = useNavigate()
   const [selectedContentType, setSelectedContentType] = useState<string>('')
   const [selectedStatus, setSelectedStatus] = useState<string>('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [viewingContentId, setViewingContentId] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const confirm = useConfirm()
 
@@ -96,8 +98,10 @@ export default function Content() {
         ) : filteredContents.length === 0 ? (
           <div className="p-8 text-center text-gray-500">No content found</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -154,9 +158,16 @@ export default function Content() {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
                         <button
+                          onClick={() => setViewingContentId(content.id)}
+                          className="text-blue-600 hover:text-blue-900 transition-colors touch-manipulation p-1"
+                          title="Xem chi tiết"
+                        >
+                          <Eye className="h-5 w-5" />
+                        </button>
+                        <button
                           onClick={() => navigate(`/content/${content.id}`)}
-                          className="text-primary-600 hover:text-primary-900"
-                          title="Edit"
+                          className="text-primary-600 hover:text-primary-900 transition-colors touch-manipulation p-1"
+                          title="Chỉnh sửa"
                         >
                           <Edit className="h-5 w-5" />
                         </button>
@@ -171,8 +182,8 @@ export default function Content() {
                               deleteMutation.mutate(content.id)
                             }
                           }}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete"
+                          className="text-red-600 hover:text-red-900 transition-colors touch-manipulation p-1"
+                          title="Xóa"
                         >
                           <Trash2 className="h-5 w-5" />
                         </button>
@@ -183,8 +194,103 @@ export default function Content() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden divide-y divide-gray-200">
+            {filteredContents.map((content) => (
+              <div key={content.id} className="p-4 hover:bg-gray-50">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base font-medium text-gray-900 mb-1">{content.title}</div>
+                    {content.description && (
+                      <div className="text-sm text-gray-500 line-clamp-2 mb-2">{content.description}</div>
+                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        {content.contentType}
+                      </span>
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          content.status === 'Published'
+                            ? 'bg-green-100 text-green-800'
+                            : content.status === 'Draft'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {content.status}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {format(new Date(content.createdAt), 'MMM d, yyyy')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-gray-100">
+                  <button
+                    onClick={() => setViewingContentId(content.id)}
+                    className="flex items-center gap-1 px-3 py-2 text-blue-600 hover:text-blue-900 active:bg-blue-50 rounded-md transition-colors touch-manipulation"
+                    title="Xem chi tiết"
+                  >
+                    <Eye className="h-4 w-4" />
+                    <span className="text-xs">Xem</span>
+                  </button>
+                  <button
+                    onClick={() => navigate(`/content/${content.id}`)}
+                    className="flex items-center gap-1 px-3 py-2 text-primary-600 hover:text-primary-900 active:bg-primary-50 rounded-md transition-colors touch-manipulation"
+                    title="Chỉnh sửa"
+                  >
+                    <Edit className="h-4 w-4" />
+                    <span className="text-xs">Sửa</span>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: 'Xóa nội dung',
+                        message: `Bạn có chắc chắn muốn xóa nội dung "${content.title}"?`,
+                        confirmText: 'Xóa nội dung',
+                      })
+                      if (ok) {
+                        deleteMutation.mutate(content.id)
+                      }
+                    }}
+                    className="flex items-center gap-1 px-3 py-2 text-red-600 hover:text-red-900 active:bg-red-50 rounded-md transition-colors touch-manipulation"
+                    title="Xóa"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="text-xs">Xóa</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
         )}
       </div>
+
+      {/* Content Detail Modal */}
+      {viewingContentId && (
+        <ContentDetail
+          contentId={viewingContentId}
+          onClose={() => setViewingContentId(null)}
+          onEdit={(content) => {
+            setViewingContentId(null)
+            navigate(`/content/${content.id}`)
+          }}
+          onDelete={async (contentId) => {
+            const content = contents.find(c => c.id === contentId)
+            const ok = await confirm({
+              title: 'Xóa nội dung',
+              message: `Bạn có chắc chắn muốn xóa nội dung "${content?.title}"?`,
+              confirmText: 'Xóa nội dung',
+            })
+            if (ok) {
+              deleteMutation.mutate(contentId)
+              setViewingContentId(null)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }
