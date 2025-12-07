@@ -10,6 +10,59 @@ using WebApp.Core.Interfaces;
 
 namespace WebApp.API.Controllers;
 
+// Helper class for partial file streaming
+internal class PartialFileStream : Stream
+{
+    private readonly Stream _baseStream;
+    private readonly long _start;
+    private readonly long _length;
+    private long _position;
+
+    public PartialFileStream(Stream baseStream, long start, long length)
+    {
+        _baseStream = baseStream;
+        _start = start;
+        _length = length;
+        _position = 0;
+        _baseStream.Seek(start, SeekOrigin.Begin);
+    }
+
+    public override bool CanRead => _baseStream.CanRead;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => _length;
+    public override long Position
+    {
+        get => _position;
+        set => throw new NotSupportedException();
+    }
+
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        var remaining = _length - _position;
+        if (remaining <= 0) return 0;
+        
+        var bytesToRead = (int)Math.Min(count, remaining);
+        var bytesRead = _baseStream.Read(buffer, offset, bytesToRead);
+        _position += bytesRead;
+        return bytesRead;
+    }
+
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override void Flush() => _baseStream.Flush();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _baseStream?.Dispose();
+        }
+        base.Dispose(disposing);
+    }
+}
+
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
@@ -114,6 +167,9 @@ public class FilesController : ControllerBase
     [AllowAnonymous] // Allow anonymous but verify token from query string
     public async Task<IActionResult> StreamFile(Guid id, [FromQuery] string? token = null)
     {
+        // Log request for debugging
+        Console.WriteLine($"[StreamFile] Request received - FileId: {id}, HasToken: {!string.IsNullOrEmpty(token)}, Origin: {Request.Headers["Origin"]}");
+        
         // Verify token from query string (for video element which can't send headers)
         if (!string.IsNullOrEmpty(token))
         {
@@ -135,13 +191,16 @@ public class FilesController : ControllerBase
                 };
 
                 var principal = tokenHandler.ValidateToken(token, validationParameters, out _);
+                Console.WriteLine($"[StreamFile] Token validated successfully for file {id}");
                 // Token is valid, continue
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"[StreamFile] Token validation failed for file {id}: {ex.Message}");
                 // If token validation fails, try Authorization header as fallback
                 if (!User.Identity?.IsAuthenticated ?? true)
                 {
+                    Console.WriteLine($"[StreamFile] Unauthorized - no valid token or authentication");
                     return Unauthorized();
                 }
             }
@@ -151,8 +210,10 @@ public class FilesController : ControllerBase
             // No token in query, check Authorization header
             if (!User.Identity?.IsAuthenticated ?? true)
             {
+                Console.WriteLine($"[StreamFile] Unauthorized - no token in query and no authentication header");
                 return Unauthorized();
             }
+            Console.WriteLine($"[StreamFile] Authenticated via Authorization header for file {id}");
         }
 
         var fileMetadata = await _fileService.GetFileMetadataAsync(id);
@@ -210,16 +271,18 @@ public class FilesController : ControllerBase
             Response.Headers.Append("Content-Length", contentLength.ToString());
             Response.ContentType = fileMetadata.ContentType;
             Response.Headers.Append("Cache-Control", "public, max-age=3600"); // Cache for 1 hour
-            Response.Headers.Append("Access-Control-Allow-Origin", "*"); // Allow CORS for video streaming
+            // CORS headers are handled by middleware - don't set manually to avoid conflicts
             Response.Headers.Append("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length"); // Expose headers for Range requests
 
             // Tối ưu buffer size cho streaming: 2MB buffer để tăng tốc độ đọc
             // Buffer lớn hơn = ít I/O operations hơn = nhanh hơn
             const int STREAM_BUFFER_SIZE = 2 * 1024 * 1024; // 2MB buffer
             var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, STREAM_BUFFER_SIZE, useAsync: true);
-            fileStream.Seek(start, SeekOrigin.Begin);
+            
+            // Use PartialFileStream to ensure only the requested range is streamed
+            var partialStream = new PartialFileStream(fileStream, start, contentLength);
 
-            return new FileStreamResult(fileStream, fileMetadata.ContentType)
+            return new FileStreamResult(partialStream, fileMetadata.ContentType)
             {
                 EnableRangeProcessing = false // We handle range manually
             };
@@ -244,14 +307,16 @@ public class FilesController : ControllerBase
             Response.Headers.Append("Content-Length", contentLength.ToString());
             Response.ContentType = fileMetadata.ContentType;
             Response.Headers.Append("Cache-Control", "public, max-age=3600");
-            Response.Headers.Append("Access-Control-Allow-Origin", "*");
+            // CORS headers are handled by middleware - don't set manually to avoid conflicts
             Response.Headers.Append("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
             
             const int STREAM_BUFFER_SIZE = 2 * 1024 * 1024; // 2MB buffer
             var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, STREAM_BUFFER_SIZE, useAsync: true);
-            fileStream.Seek(start, SeekOrigin.Begin);
             
-            return new FileStreamResult(fileStream, fileMetadata.ContentType)
+            // Use PartialFileStream to ensure only the requested range is streamed
+            var partialStream = new PartialFileStream(fileStream, start, contentLength);
+            
+            return new FileStreamResult(partialStream, fileMetadata.ContentType)
             {
                 EnableRangeProcessing = false
             };
@@ -263,7 +328,7 @@ public class FilesController : ControllerBase
             Response.Headers.Append("Content-Length", fileLength.ToString());
             Response.ContentType = fileMetadata.ContentType;
             Response.Headers.Append("Cache-Control", "public, max-age=3600");
-            Response.Headers.Append("Access-Control-Allow-Origin", "*");
+            // CORS headers are handled by middleware - don't set manually to avoid conflicts
             Response.Headers.Append("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length");
             
             const int FULL_STREAM_BUFFER_SIZE = 4 * 1024 * 1024; // 4MB buffer

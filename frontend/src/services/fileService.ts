@@ -198,7 +198,32 @@ export const fileService = {
 
   getStreamUrl: (id: string): string => {
     const baseUrl = api.defaults.baseURL || ''
-    return `${baseUrl}/files/${id}/stream`
+    // Ensure we have a proper URL - handle both relative and absolute baseURLs
+    let url: string
+    if (baseUrl.startsWith('http://') || baseUrl.startsWith('https://')) {
+      // Absolute URL - remove trailing slash if present
+      const cleanBaseUrl = baseUrl.replace(/\/$/, '')
+      url = `${cleanBaseUrl}/files/${id}/stream`
+    } else {
+      // Relative URL - use window.location.origin in browser
+      if (typeof window !== 'undefined') {
+        const origin = window.location.origin
+        // Ensure baseUrl starts with / and doesn't end with /
+        const cleanBaseUrl = baseUrl.replace(/^\/?/, '/').replace(/\/$/, '')
+        url = `${origin}${cleanBaseUrl}/files/${id}/stream`
+      } else {
+        // Fallback for SSR
+        const cleanBaseUrl = baseUrl.replace(/\/$/, '')
+        url = `${cleanBaseUrl}/files/${id}/stream`
+      }
+    }
+    
+    // Log in development for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[getStreamUrl] Generated URL:', url, 'from baseURL:', baseUrl, 'fileId:', id)
+    }
+    
+    return url
   },
 }
 

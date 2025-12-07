@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, ChevronLeft, ChevronRight } from 'lucide-react'
-import api from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { FileResponse } from '../services/fileService'
 
@@ -31,7 +30,7 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
   const [networkState, setNetworkState] = useState<string>('')
   const [canPlay, setCanPlay] = useState(false) // Video đã sẵn sàng phát chưa
   const [videoError, setVideoError] = useState<{ code: number; message: string; codeName: string } | null>(null)
-  const controlsTimeoutRef = useRef<NodeJS.Timeout>()
+  const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
   const lastBufferedTimeRef = useRef(0)
   const lastTimeRef = useRef(Date.now())
   const videoFileSizeRef = useRef<number>(0)
@@ -71,20 +70,51 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
         setIsPlaying(false) // Stop playing when changing video
         
         const token = useAuthStore.getState().token
+        if (!token) {
+          console.warn('[VideoPlayer] No token found, video may not load')
+        }
+        
         const url = token ? `${videoUrl}${videoUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : videoUrl
+        
+        // Validate URL
+        try {
+          new URL(url) // This will throw if URL is invalid
+          console.log('[VideoPlayer] Loading video:', {
+            originalUrl: videoUrl,
+            finalUrl: url,
+            hasToken: !!token,
+            fileName: fileName,
+            fileId: fileId
+          })
+        } catch (urlError) {
+          console.error('[VideoPlayer] Invalid URL:', url, urlError)
+          setVideoError({
+            code: 0,
+            message: `Invalid video URL: ${url}`,
+            codeName: 'INVALID_URL'
+          })
+          setIsLoading(false)
+          setCanPlay(false)
+          return
+        }
         
         // For video element, use URL directly with token
         // Browser will handle Range Requests automatically
         setVideoSrc(url)
       } catch (error) {
-        console.error('Error setting video source:', error)
+        console.error('[VideoPlayer] Error setting video source:', error)
         setIsLoading(false)
         setCanPlay(false)
+        setVideoError({
+          code: 0,
+          message: error instanceof Error ? error.message : 'Unknown error',
+          codeName: 'LOAD_ERROR'
+        })
       }
     }
 
     loadVideo()
-  }, [videoUrl])
+  }, [videoUrl, fileName, fileId])
 
   useEffect(() => {
     const video = videoRef.current
@@ -113,9 +143,15 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
         videoFileSizeRef.current = (video as any).fileSize
       }
     }
-    const handlePlay = () => setIsPlaying(true)
+    const handlePlay = () => {
+      setIsPlaying(true)
+      setIsLoading(false) // Ẩn loading overlay khi bắt đầu phát
+    }
     const handlePause = () => setIsPlaying(false)
-    const handleEnded = () => setIsPlaying(false)
+    const handleEnded = () => {
+      setIsPlaying(false)
+      setIsLoading(false)
+    }
     // Removed handleFullscreenChange - we use state-based fullscreen for modal
 
     // Track buffering progress - improved to handle cases where duration is not yet available
@@ -266,9 +302,10 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
       // Force update duration và currentTime nếu có
       if (video.duration && isFinite(video.duration) && video.duration > 0) {
         if (duration === 0) setDuration(video.duration)
-        if (video.currentTime !== currentTime) setCurrentTime(video.currentTime)
+        // Always update currentTime to ensure progress bar works
+        setCurrentTime(video.currentTime)
       }
-    }, 200) // Update nhanh hơn để responsive hơn
+    }, 100) // Update nhanh hơn để progress bar mượt hơn
 
     return () => {
       video.removeEventListener('timeupdate', updateTime)
@@ -292,7 +329,7 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
       // Removed fullscreenchange listener
       clearInterval(bufferedInterval)
     }
-  }, [])
+  }, [duration, canPlay, isPlaying, videoSrc])
 
   const togglePlay = () => {
     const video = videoRef.current
@@ -367,21 +404,54 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
     return (bytesPerSecond / (1024 * 1024)).toFixed(2) + ' MB/s'
   }
 
-  const handleMouseMove = () => {
-    setShowControls(true)
+  // Auto-hide controls after inactivity (YouTube-style)
+  useEffect(() => {
+    if (!isPlaying) {
+      // Always show controls when paused
+      setShowControls(true)
+      return
+    }
+
+    // When playing, auto-hide after 3 seconds of inactivity
     if (controlsTimeoutRef.current) {
       clearTimeout(controlsTimeoutRef.current)
     }
+
     controlsTimeoutRef.current = setTimeout(() => {
       if (isPlaying) {
         setShowControls(false)
       }
     }, 3000)
+
+    return () => {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current)
+      }
+    }
+  }, [isPlaying, showControls])
+
+  const handleMouseMove = () => {
+    setShowControls(true)
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current)
+    }
+    // Auto-hide after 3 seconds of no mouse movement
+    if (isPlaying) {
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false)
+      }, 3000)
+    }
   }
 
   const handleMouseLeave = () => {
+    // Only auto-hide if playing
     if (isPlaying) {
-      setShowControls(false)
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current)
+      }
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false)
+      }, 1000) // Hide faster when mouse leaves
     }
   }
 
@@ -389,7 +459,9 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
     <>
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center"
+        className={`fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center ${
+          isFullscreen ? 'bg-black' : ''
+        }`}
         onClick={!isFullscreen ? onClose : undefined}
         onMouseMove={handleMouseMove} 
         onMouseLeave={handleMouseLeave}
@@ -399,11 +471,17 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
         <div 
           className={`relative bg-black rounded-lg shadow-2xl overflow-hidden transition-all duration-300 ${
             isFullscreen 
-              ? 'w-full h-full rounded-none m-0' 
+              ? 'fixed inset-0 w-screen h-screen rounded-none m-0' 
               : 'w-full max-w-6xl h-auto max-h-[90vh] aspect-video animate-in fade-in zoom-in-95 duration-300 mx-auto'
           }`}
-          onClick={(e) => e.stopPropagation()}
-          style={isFullscreen ? { margin: 0, padding: 0 } : { minHeight: '400px', margin: '1rem auto' }}
+          onClick={(e) => {
+            e.stopPropagation()
+            // Toggle play/pause on video container click
+            if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'VIDEO') {
+              togglePlay()
+            }
+          }}
+          style={isFullscreen ? { margin: 0, padding: 0, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 } : { minHeight: '400px', margin: '1rem auto' }}
         >
           {/* Header bar - chỉ hiển thị khi không fullscreen */}
           {!isFullscreen && (
@@ -457,7 +535,7 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
           )}
 
           {/* Video container */}
-          <div className={`relative flex items-center justify-center ${isFullscreen ? 'w-full h-full' : 'w-full h-full'}`}>
+          <div className={`relative flex items-center justify-center ${isFullscreen ? 'absolute inset-0 w-full h-full' : 'w-full h-full'}`}>
             {/* Error overlay - hiển thị khi có lỗi */}
             {videoError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center z-20 bg-black/90 pointer-events-auto">
@@ -512,8 +590,8 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
             </div>
             )}
 
-            {/* Loading overlay - chỉ hiển thị khi video chưa thể phát được (chưa có metadata) */}
-            {isLoading && !canPlay && !videoError && (
+            {/* Loading overlay - chỉ hiển thị khi video chưa thể phát được và chưa bắt đầu phát */}
+            {isLoading && !canPlay && !videoError && !isPlaying && (
           <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black/50 pointer-events-none">
             <div className="text-white text-lg mb-4">
               Đang tải video...
@@ -550,7 +628,8 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
           <video
             ref={videoRef}
             src={videoSrc}
-            className={`w-full h-full object-contain z-0 ${isFullscreen ? '' : 'rounded-lg'}`}
+            className={`${isFullscreen ? 'w-full h-full' : 'w-full h-full'} object-contain z-0 ${isFullscreen ? '' : 'rounded-lg'}`}
+            style={isFullscreen ? { width: '100%', height: '100%', objectFit: 'contain' } : undefined}
             playsInline
             preload="auto"
             // Tối ưu buffering: browser sẽ tự động buffer nhiều hơn
@@ -606,6 +685,7 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
               console.log('Video playing')
               setIsLoading(false)
               setIsBuffering(false)
+              setCanPlay(true) // Đảm bảo canPlay = true khi đang phát
             }}
             onProgress={() => {
               // Update buffered progress on every progress event
@@ -677,30 +757,38 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
           <div className="text-white text-lg">Preparing video...</div>
         ) : null}
 
-        {/* Controls overlay - z-index cao hơn loading overlay */}
-        {showControls && (
-          <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 z-30 ${!isFullscreen ? 'rounded-b-lg' : ''}`}>
-            {/* Progress bar with buffered indicator - luôn hiển thị */}
+        {/* Progress bar - luôn hiển thị (YouTube-style) */}
+        <div
+          className="absolute bottom-0 left-0 right-0 z-30 cursor-pointer group"
+          onClick={handleSeek}
+          onMouseEnter={() => setShowControls(true)}
+        >
+          <div className="w-full h-1 bg-white/20 group-hover:h-1.5 transition-all">
+            {/* Buffered progress (gray background) */}
             <div
-              className="w-full h-2 bg-white/30 rounded-full mb-4 cursor-pointer group relative"
-              onClick={handleSeek}
+              className="absolute h-full bg-white/30 transition-all"
+              style={{ width: `${Math.max(0, Math.min(100, bufferedProgress))}%` }}
+            />
+            {/* Played progress (red) */}
+            <div
+              className="h-full bg-red-600 group-hover:bg-red-500 transition-all relative z-10"
+              style={{ width: `${duration > 0 && isFinite(duration) ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0}%` }}
             >
-              {/* Buffered progress (gray background) - luôn hiển thị, ngay cả khi = 0 */}
-              <div
-                className="absolute h-full bg-white/20 rounded-full transition-all"
-                style={{ width: `${Math.max(0, Math.min(100, bufferedProgress))}%` }}
-              />
-              {/* Played progress (red) */}
-              <div
-                className="h-full bg-red-600 rounded-full transition-all group-hover:bg-red-500 relative z-10"
-                style={{ width: `${duration > 0 && isFinite(duration) ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0}%` }}
-              >
-                <div className="h-full w-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity float-right -mr-1.5" />
-              </div>
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 h-3 w-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
+          </div>
+        </div>
 
-            {/* Control buttons */}
-            <div className="flex items-center gap-4">
+        {/* Controls overlay - z-index cao hơn loading overlay */}
+        <div 
+          className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 z-30 transition-opacity duration-300 ${
+            !isFullscreen ? 'rounded-b-lg' : ''
+          } ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          onMouseEnter={() => setShowControls(true)}
+        >
+          {/* Control buttons */}
+          {showControls && (
+            <div className="flex items-center gap-4 mt-2">
               {/* Play/Pause */}
               <button
                 onClick={togglePlay}
@@ -783,14 +871,16 @@ export default function VideoPlayer({ videoUrl, fileName, fileId, files, current
                 {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
               </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
             {/* Play button overlay (when paused) */}
-            {!isPlaying && !showControls && (
+            {!isPlaying && (
               <button
                 onClick={togglePlay}
-                className="absolute inset-0 flex items-center justify-center text-white hover:text-gray-300 transition-colors z-10"
+                className={`absolute inset-0 flex items-center justify-center text-white hover:text-gray-300 transition-opacity duration-300 z-10 ${
+                  showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                }`}
                 aria-label="Play"
               >
                 <div className="bg-black/50 rounded-full p-6">
