@@ -1,4 +1,4 @@
-namespace WebApp.Core.DTOs.Content;
+namespace WebApp.Application.DTOs.Content;
 
 public class ContentDto
 {
@@ -34,20 +34,3 @@ public class UpdateContentDto
     public string Status { get; set; } = string.Empty;
     public List<Guid>? FileIds { get; set; }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

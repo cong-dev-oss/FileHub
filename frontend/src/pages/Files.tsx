@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fileService, FileResponse } from '../services/fileService'
-import { tusUploadService, TusUploadProgress } from '../services/tusUploadService'
 import { folderService, FolderDto } from '../services/folderService'
 import { videoConversionService } from '../services/videoConversionService'
 import { Upload, Trash2, Download, File, Search, Folder, FolderPlus, ChevronRight, ChevronDown, Move, X, Play, Image as ImageIcon } from 'lucide-react'
@@ -11,6 +10,7 @@ import { useConfirm } from '../components/ConfirmDialog'
 import VideoPlayer from '../components/VideoPlayer'
 import VideoConversionManager from '../components/VideoConversionManager'
 import ImagePreview from '../components/ImagePreview'
+import { extractAllErrorMessages } from '../utils/errorHandler'
 
 interface UploadState {
   fileName: string
@@ -40,7 +40,7 @@ export default function Files() {
     queryFn: () => folderService.getTree(),
   })
 
-  const { data: files = [], isLoading: filesLoading, error } = useQuery({
+  const { data: files = [], isLoading: filesLoading } = useQuery({
     queryKey: ['files', selectedFileType, selectedFolderId],
     queryFn: () => fileService.getAll(selectedFileType || undefined, selectedFolderId),
     retry: 1,
@@ -55,7 +55,8 @@ export default function Files() {
       toast.success('Folder created successfully')
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to create folder')
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
     },
   })
 
@@ -69,7 +70,8 @@ export default function Files() {
       toast.success('Folder deleted successfully')
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Failed to delete folder')
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
     },
   })
 
@@ -92,8 +94,9 @@ export default function Files() {
       queryClient.invalidateQueries({ queryKey: ['files'] })
       toast.success('File deleted successfully')
     },
-    onError: () => {
-      toast.error('Failed to delete file')
+    onError: (error: any) => {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
     },
   })
 
@@ -146,9 +149,9 @@ export default function Files() {
       }
     } catch (error: any) {
       console.error('Upload error:', error)
-      const errorMessage = error.response?.data?.message || error.message || 'Upload failed'
       setUploadState(null)
-      toast.error(errorMessage)
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
     }
   }
 
@@ -164,8 +167,9 @@ export default function Files() {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
       toast.success('Download started')
-    } catch (error) {
-      toast.error('Download failed')
+    } catch (error: any) {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
     }
   }
 

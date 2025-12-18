@@ -6,6 +6,7 @@ import { Users, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useConfirm } from '../components/ConfirmDialog'
 import FormField from '../components/FormField'
+import { extractAllErrorMessages } from '../utils/errorHandler'
 
 export default function UserManagement() {
   const queryClient = useQueryClient()
@@ -40,7 +41,10 @@ export default function UserManagement() {
       toast.success('User roles updated')
       queryClient.invalidateQueries({ queryKey: ['users'] })
     },
-    onError: () => toast.error('Failed to update user roles'),
+    onError: (error: any) => {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
+    },
   })
 
   const updateStatusMutation = useMutation({
@@ -50,7 +54,10 @@ export default function UserManagement() {
       toast.success('User status updated')
       queryClient.invalidateQueries({ queryKey: ['users'] })
     },
-    onError: () => toast.error('Failed to update user status'),
+    onError: (error: any) => {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
+    },
   })
 
   const deleteUserMutation = useMutation({
@@ -61,7 +68,10 @@ export default function UserManagement() {
       setSelectedRoles([])
       queryClient.invalidateQueries({ queryKey: ['users'] })
     },
-    onError: () => toast.error('Failed to delete user'),
+    onError: (error: any) => {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
+    },
   })
 
   const createUserMutation = useMutation({
@@ -73,8 +83,33 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['users'] })
     },
     onError: (error: any) => {
-      const message = error?.response?.data ?? 'Failed to create user'
-      toast.error(typeof message === 'string' ? message : 'Failed to create user')
+      const errorMessages = extractAllErrorMessages(error)
+      // Show all validation errors
+      errorMessages.forEach((msg) => toast.error(msg))
+      
+      // Also set form errors for better UX
+      if (error.response?.data?.errors) {
+        const formErrors: Record<string, string> = {}
+        const errorData = error.response.data.errors
+        
+        // Map errors to form fields
+        Object.keys(errorData).forEach((key) => {
+          if (Array.isArray(errorData[key]) && errorData[key].length > 0) {
+            // Map common error keys to form fields
+            const fieldMap: Record<string, string> = {
+              'General': 'general',
+              'Password': 'password',
+              'Email': 'email',
+              'FirstName': 'firstName',
+              'LastName': 'lastName',
+            }
+            const fieldName = fieldMap[key] || key.toLowerCase()
+            formErrors[fieldName] = errorData[key][0]
+          }
+        })
+        
+        setErrors(formErrors)
+      }
     },
   })
 

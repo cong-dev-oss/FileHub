@@ -6,6 +6,7 @@ import { authService } from '../services/authService'
 import toast from 'react-hot-toast'
 import { LogIn, FolderOpen } from 'lucide-react'
 import FormField from '../components/FormField'
+import { formatErrorMessage } from '../utils/errorHandler'
 
 interface LoginForm {
   email: string
@@ -33,7 +34,10 @@ export default function Login() {
       toast.success('Login successful!')
       navigate('/dashboard')
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Login failed')
+      // Use standardized error handler
+      const errorMessage = formatErrorMessage(error)
+      toast.error(errorMessage)
+      console.error('Login error:', error)
     } finally {
       setIsLoading(false)
     }

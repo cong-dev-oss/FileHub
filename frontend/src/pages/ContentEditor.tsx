@@ -6,6 +6,7 @@ import { contentService, CreateContentDto } from '../services/contentService'
 import toast from 'react-hot-toast'
 import { Save, ArrowLeft } from 'lucide-react'
 import FormField from '../components/FormField'
+import { extractAllErrorMessages } from '../utils/errorHandler'
 
 export default function ContentEditor() {
   const { id } = useParams()
@@ -48,8 +49,9 @@ export default function ContentEditor() {
       toast.success('Content created successfully')
       navigate('/content')
     },
-    onError: () => {
-      toast.error('Failed to create content')
+    onError: (error: any) => {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
     },
   })
 
@@ -61,8 +63,9 @@ export default function ContentEditor() {
       toast.success('Content updated successfully')
       navigate('/content')
     },
-    onError: () => {
-      toast.error('Failed to update content')
+    onError: (error: any) => {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
     },
   })
 

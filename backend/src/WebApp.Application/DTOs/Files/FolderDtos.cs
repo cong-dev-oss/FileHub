@@ -1,4 +1,4 @@
-namespace WebApp.Core.DTOs.Files;
+namespace WebApp.Application.DTOs.Files;
 
 public class FolderDto
 {
@@ -24,12 +24,3 @@ public class MoveFileDto
 {
     public Guid? FolderId { get; set; }
 }
-
-
-
-
-
-
-
-
-

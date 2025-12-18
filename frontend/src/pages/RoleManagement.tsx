@@ -5,6 +5,7 @@ import { Plus, Trash2, Shield, CheckSquare } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
 import { useConfirm } from '../components/ConfirmDialog'
+import { extractAllErrorMessages } from '../utils/errorHandler'
 
 export default function RoleManagement() {
   const queryClient = useQueryClient()
@@ -31,7 +32,10 @@ export default function RoleManagement() {
       setNewRoleName('')
       toast.success('Role created')
     },
-    onError: () => toast.error('Failed to create role'),
+    onError: (error: any) => {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
+    },
   })
 
   const deleteRoleMutation = useMutation({
@@ -42,7 +46,10 @@ export default function RoleManagement() {
       setSelectedPermissions([])
       toast.success('Role deleted')
     },
-    onError: () => toast.error('Failed to delete role'),
+    onError: (error: any) => {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
+    },
   })
 
   const setPermissionsMutation = useMutation({
@@ -55,7 +62,10 @@ export default function RoleManagement() {
         toast('Permissions changed. Please re-login to update your session.', { icon: 'ℹ️' })
       }
     },
-    onError: () => toast.error('Failed to update permissions'),
+    onError: (error: any) => {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
+    },
   })
 
   // Khi chọn role, tải quyền của role đó
@@ -68,8 +78,9 @@ export default function RoleManagement() {
       try {
         const codes = await roleService.getRolePermissions(selectedRole.id)
         setSelectedPermissions(codes)
-      } catch {
-        toast.error('Failed to load role permissions')
+      } catch (error: any) {
+        const errorMessages = extractAllErrorMessages(error)
+        errorMessages.forEach((msg) => toast.error(msg))
       }
     }
 

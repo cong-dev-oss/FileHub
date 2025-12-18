@@ -1,9 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using WebApp.Core.Entities;
-using WebApp.Infrastructure.Data;
+using WebApp.API.Extensions;
+using WebApp.Application.Interfaces;
 
 namespace WebApp.API.Controllers;
 
@@ -12,69 +10,57 @@ namespace WebApp.API.Controllers;
 [Authorize(Roles = "Admin")] // Chỉ Admin mặc định được quản lý nhóm quyền
 public class RolesController : ControllerBase
 {
-    private readonly RoleManager<IdentityRole> _roleManager;
-    private readonly ApplicationDbContext _dbContext;
+    private readonly IRoleService _roleService;
 
-    public RolesController(
-        RoleManager<IdentityRole> roleManager,
-        ApplicationDbContext dbContext)
+    public RolesController(IRoleService roleService)
     {
-        _roleManager = roleManager;
-        _dbContext = dbContext;
+        _roleService = roleService;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetRoles()
     {
-        var roles = await _roleManager.Roles
-            .Select(r => new
-            {
-                r.Id,
-                r.Name
-            })
-            .ToListAsync();
+        var result = await _roleService.GetRolesAsync();
+        if (!result.Success)
+        {
+            return this.BadRequestResponse(result.ErrorMessage ?? "Lỗi không xác định", "GET_ROLES_FAILED");
+        }
 
-        return Ok(roles);
+        return this.OkResponse(result.Data!, "Lấy danh sách vai trò thành công");
     }
 
     [HttpPost]
     public async Task<IActionResult> CreateRole([FromBody] string roleName)
     {
-        if (string.IsNullOrWhiteSpace(roleName))
+        var result = await _roleService.CreateRoleAsync(roleName);
+        if (!result.Success)
         {
-            return BadRequest("Role name is required.");
+            if (result.Errors != null && result.Errors.Any())
+            {
+                var errors = new Dictionary<string, string[]> { { "General", result.Errors.ToArray() } };
+                return this.BadRequestResponse(result.ErrorMessage ?? "Tạo vai trò thất bại", errors, "CREATE_ROLE_FAILED");
+            }
+            return this.BadRequestResponse(result.ErrorMessage ?? "Tạo vai trò thất bại", "CREATE_ROLE_FAILED");
         }
 
-        if (await _roleManager.RoleExistsAsync(roleName))
-        {
-            return BadRequest("Role already exists.");
-        }
-
-        var result = await _roleManager.CreateAsync(new IdentityRole(roleName));
-        if (!result.Succeeded)
-        {
-            return BadRequest(result.Errors);
-        }
-
-        return Ok();
+        return this.OkResponse("Tạo vai trò thành công");
     }
 
     [HttpDelete("{roleId}")]
     public async Task<IActionResult> DeleteRole(string roleId)
     {
-        var role = await _roleManager.FindByIdAsync(roleId);
-        if (role == null)
+        var result = await _roleService.DeleteRoleAsync(roleId);
+        if (!result.Success)
         {
-            return NotFound();
+            if (result.Errors != null && result.Errors.Any())
+            {
+                var errors = new Dictionary<string, string[]> { { "General", result.Errors.ToArray() } };
+                return this.BadRequestResponse(result.ErrorMessage ?? "Xóa vai trò thất bại", errors, "DELETE_ROLE_FAILED");
+            }
+            return this.BadRequestResponse(result.ErrorMessage ?? "Xóa vai trò thất bại", "DELETE_ROLE_FAILED");
         }
 
-        var result = await _roleManager.DeleteAsync(role);
-        if (!result.Succeeded)
-        {
-            return BadRequest(result.Errors);
-        }
-
-        return NoContent();
+        return this.NoContentResponse();
     }
 
     /// <summary>
@@ -83,19 +69,13 @@ public class RolesController : ControllerBase
     [HttpGet("{roleId}/permissions")]
     public async Task<IActionResult> GetRolePermissions(string roleId)
     {
-        var role = await _roleManager.FindByIdAsync(roleId);
-        if (role == null)
+        var result = await _roleService.GetRolePermissionsAsync(roleId);
+        if (!result.Success)
         {
-            return NotFound();
+            return this.NotFoundResponse(result.ErrorMessage ?? "Không tìm thấy vai trò");
         }
 
-        var permissionCodes = await _dbContext.RolePermissions
-            .Where(rp => rp.RoleId == roleId)
-            .Include(rp => rp.Permission)
-            .Select(rp => rp.Permission.Code)
-            .ToListAsync();
-
-        return Ok(permissionCodes);
+        return this.OkResponse(result.Data!, "Lấy danh sách quyền của vai trò thành công");
     }
 
     /// <summary>
@@ -104,40 +84,13 @@ public class RolesController : ControllerBase
     [HttpPost("{roleId}/permissions")]
     public async Task<IActionResult> SetRolePermissions(string roleId, [FromBody] List<string> permissionCodes)
     {
-        var role = await _roleManager.FindByIdAsync(roleId);
-        if (role == null)
+        var result = await _roleService.SetRolePermissionsAsync(roleId, permissionCodes);
+        if (!result.Success)
         {
-            return NotFound();
+            return this.NotFoundResponse(result.ErrorMessage ?? "Không tìm thấy vai trò");
         }
 
-        permissionCodes = permissionCodes
-            .Where(c => !string.IsNullOrWhiteSpace(c))
-            .Select(c => c.Trim().ToUpperInvariant())
-            .Distinct()
-            .ToList();
-
-        var permissions = await _dbContext.Permissions
-            .Where(p => permissionCodes.Contains(p.Code))
-            .ToListAsync();
-
-        // Xóa các mapping cũ
-        var existing = await _dbContext.RolePermissions
-            .Where(rp => rp.RoleId == roleId)
-            .ToListAsync();
-
-        _dbContext.RolePermissions.RemoveRange(existing);
-
-        // Thêm mapping mới
-        var newMappings = permissions.Select(p => new RolePermission
-        {
-            RoleId = roleId,
-            PermissionId = p.Id
-        });
-
-        await _dbContext.RolePermissions.AddRangeAsync(newMappings);
-        await _dbContext.SaveChangesAsync();
-
-        return Ok();
+        return this.OkResponse("Gán quyền cho vai trò thành công");
     }
 }
 

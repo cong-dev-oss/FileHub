@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace WebApp.Core.DTOs.Users;
+namespace WebApp.Application.DTOs.Users;
 
 public class UserListItemDto
 {
@@ -49,5 +49,3 @@ public class CreateUserDto
     /// </summary>
     public IList<string> Roles { get; set; } = new List<string>();
 }
-
-

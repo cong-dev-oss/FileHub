@@ -1,14 +1,9 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.EntityFrameworkCore;
-using WebApp.Core.DTOs.Auth;
-using WebApp.Core.Entities;
-using WebApp.Infrastructure.Data;
+using WebApp.API.Extensions;
+using WebApp.Application.DTOs.Auth;
+using WebApp.Application.Interfaces;
 
 namespace WebApp.API.Controllers;
 
@@ -16,21 +11,11 @@ namespace WebApp.API.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
-    private readonly UserManager<User> _userManager;
-    private readonly SignInManager<User> _signInManager;
-    private readonly IConfiguration _configuration;
-    private readonly ApplicationDbContext _dbContext;
+    private readonly IAuthService _authService;
 
-    public AuthController(
-        UserManager<User> userManager,
-        SignInManager<User> signInManager,
-        IConfiguration configuration,
-        ApplicationDbContext dbContext)
+    public AuthController(IAuthService authService)
     {
-        _userManager = userManager;
-        _signInManager = signInManager;
-        _configuration = configuration;
-        _dbContext = dbContext;
+        _authService = authService;
     }
 
     [HttpPost("register")]
@@ -38,46 +23,21 @@ public class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return this.BadRequestResponse(ModelState);
         }
 
-        var user = new User
+        var result = await _authService.RegisterAsync(registerDto);
+        if (!result.Success)
         {
-            UserName = registerDto.Email,
-            Email = registerDto.Email,
-            FirstName = registerDto.FirstName,
-            LastName = registerDto.LastName,
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        var result = await _userManager.CreateAsync(user, registerDto.Password);
-
-        if (!result.Succeeded)
-        {
-            return BadRequest(new { errors = result.Errors });
-        }
-
-        var (token, roles, permissions) = await GenerateJwtTokenAsync(user);
-        var refreshToken = GenerateRefreshToken();
-
-        return Ok(new AuthResponseDto
-        {
-            Token = token,
-            RefreshToken = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(60),
-            User = new UserDto
+            if (result.Errors != null && result.Errors.Any())
             {
-                Id = user.Id,
-                Email = user.Email!,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Roles = roles,
-                Permissions = permissions
-            },
-            Roles = roles,
-            Permissions = permissions
-        });
+                var errors = new Dictionary<string, string[]> { { "General", result.Errors.ToArray() } };
+                return this.BadRequestResponse(result.ErrorMessage ?? "Đăng ký thất bại", errors, "REGISTRATION_FAILED");
+            }
+            return this.BadRequestResponse(result.ErrorMessage ?? "Đăng ký thất bại", "REGISTRATION_FAILED");
+        }
+
+        return this.OkResponse(result.Data!, "Đăng ký thành công");
     }
 
     [HttpPost("login")]
@@ -85,41 +45,16 @@ public class AuthController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return this.BadRequestResponse(ModelState);
         }
 
-        var user = await _userManager.FindByEmailAsync(loginDto.Email);
-        if (user == null || !user.IsActive)
+        var result = await _authService.LoginAsync(loginDto);
+        if (!result.Success)
         {
-            return Unauthorized(new { message = "Invalid credentials" });
+            return this.UnauthorizedResponse(result.ErrorMessage ?? "Thông tin đăng nhập không hợp lệ", "INVALID_CREDENTIALS");
         }
 
-        var result = await _signInManager.CheckPasswordSignInAsync(user, loginDto.Password, false);
-        if (!result.Succeeded)
-        {
-            return Unauthorized(new { message = "Invalid credentials" });
-        }
-
-        var (token, roles, permissions) = await GenerateJwtTokenAsync(user);
-        var refreshToken = GenerateRefreshToken();
-
-        return Ok(new AuthResponseDto
-        {
-            Token = token,
-            RefreshToken = refreshToken,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(60),
-            User = new UserDto
-            {
-                Id = user.Id,
-                Email = user.Email!,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Roles = roles,
-                Permissions = permissions
-            },
-            Roles = roles,
-            Permissions = permissions
-        });
+        return this.OkResponse(result.Data!, "Đăng nhập thành công");
     }
 
     [Authorize]
@@ -129,100 +64,16 @@ public class AuthController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
-        var user = await _userManager.FindByIdAsync(userId);
-        if (user == null)
+        var result = await _authService.GetCurrentUserAsync(userId);
+        if (!result.Success)
         {
-            return NotFound();
+            return this.NotFoundResponse(result.ErrorMessage ?? "Không tìm thấy người dùng");
         }
 
-        var roles = await _userManager.GetRolesAsync(user);
-
-        var roleIds = await _dbContext.Roles
-            .Where(r => roles.Contains(r.Name!))
-            .Select(r => r.Id)
-            .ToListAsync();
-
-        var permissions = await _dbContext.RolePermissions
-            .Where(rp => roleIds.Contains(rp.RoleId))
-            .Include(rp => rp.Permission)
-            .Select(rp => rp.Permission.Code)
-            .Distinct()
-            .ToListAsync();
-
-        return Ok(new UserDto
-        {
-            Id = user.Id,
-            Email = user.Email!,
-            FirstName = user.FirstName,
-            LastName = user.LastName,
-            Roles = roles.ToList(),
-            Permissions = permissions
-        });
-    }
-
-    private async Task<(string token, List<string> roles, List<string> permissions)> GenerateJwtTokenAsync(User user)
-    {
-        var jwtSettings = _configuration.GetSection("JwtSettings");
-        var secretKey = jwtSettings["SecretKey"]!;
-        var issuer = jwtSettings["Issuer"]!;
-        var audience = jwtSettings["Audience"]!;
-        var expirationMinutes = int.Parse(jwtSettings["ExpirationInMinutes"] ?? "60");
-
-        var roles = await _userManager.GetRolesAsync(user);
-
-        var roleIds = await _dbContext.Roles
-            .Where(r => roles.Contains(r.Name!))
-            .Select(r => r.Id)
-            .ToListAsync();
-
-        var permissions = await _dbContext.RolePermissions
-            .Where(rp => roleIds.Contains(rp.RoleId))
-            .Include(rp => rp.Permission)
-            .Select(rp => rp.Permission.Code)
-            .Distinct()
-            .ToListAsync();
-
-        var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id),
-            new Claim(ClaimTypes.Email, user.Email!),
-            new Claim(ClaimTypes.Name, $"{user.FirstName} {user.LastName}"),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
-
-        // Add role claims
-        foreach (var role in roles)
-        {
-            claims.Add(new Claim(ClaimTypes.Role, role));
-        }
-
-        // Add permission claims
-        foreach (var permission in permissions)
-        {
-            claims.Add(new Claim("permission", permission));
-        }
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expirationMinutes),
-            signingCredentials: credentials
-        );
-
-        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
-        return (tokenString, roles.ToList(), permissions);
-    }
-
-    private string GenerateRefreshToken()
-    {
-        return Guid.NewGuid().ToString();
+        return this.OkResponse(result.Data!, "Lấy thông tin người dùng thành công");
     }
 }
 

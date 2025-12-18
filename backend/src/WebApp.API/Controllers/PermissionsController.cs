@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using WebApp.API.Extensions;
+using WebApp.Application.Interfaces;
 using WebApp.Core.Entities;
-using WebApp.Infrastructure.Data;
 
 namespace WebApp.API.Controllers;
 
@@ -11,22 +11,23 @@ namespace WebApp.API.Controllers;
 [Authorize(Roles = "Admin")] // Chỉ Admin được quản lý quyền chi tiết
 public class PermissionsController : ControllerBase
 {
-    private readonly ApplicationDbContext _dbContext;
+    private readonly IPermissionService _permissionService;
 
-    public PermissionsController(ApplicationDbContext dbContext)
+    public PermissionsController(IPermissionService permissionService)
     {
-        _dbContext = dbContext;
+        _permissionService = permissionService;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetPermissions()
     {
-        var permissions = await _dbContext.Permissions
-            .OrderBy(p => p.Module)
-            .ThenBy(p => p.Code)
-            .ToListAsync();
+        var result = await _permissionService.GetPermissionsAsync();
+        if (!result.Success)
+        {
+            return this.BadRequestResponse(result.ErrorMessage ?? "Lỗi không xác định", "GET_PERMISSIONS_FAILED");
+        }
 
-        return Ok(permissions);
+        return this.OkResponse(result.Data!, "Lấy danh sách quyền thành công");
     }
 
     [HttpPost]
@@ -34,59 +35,45 @@ public class PermissionsController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return this.BadRequestResponse(ModelState);
         }
 
-        permission.Code = permission.Code.Trim().ToUpperInvariant();
-
-        if (await _dbContext.Permissions.AnyAsync(p => p.Code == permission.Code))
+        var result = await _permissionService.CreatePermissionAsync(permission);
+        if (!result.Success)
         {
-            return BadRequest("Permission code already exists.");
+            return this.BadRequestResponse(result.ErrorMessage ?? "Tạo quyền thất bại", "CREATE_PERMISSION_FAILED");
         }
 
-        await _dbContext.Permissions.AddAsync(permission);
-        await _dbContext.SaveChangesAsync();
-
-        return Ok(permission);
+        return this.OkResponse(result.Data!, "Tạo quyền thành công");
     }
 
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdatePermission(int id, [FromBody] Permission permission)
     {
-        var existing = await _dbContext.Permissions.FindAsync(id);
-        if (existing == null)
-        {
-            return NotFound();
-        }
-
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return this.BadRequestResponse(ModelState);
         }
 
-        existing.Name = permission.Name;
-        existing.Description = permission.Description;
-        existing.Module = permission.Module;
-        existing.IsActive = permission.IsActive;
+        var result = await _permissionService.UpdatePermissionAsync(id, permission);
+        if (!result.Success)
+        {
+            return this.NotFoundResponse(result.ErrorMessage ?? "Không tìm thấy quyền");
+        }
 
-        await _dbContext.SaveChangesAsync();
-
-        return Ok(existing);
+        return this.OkResponse(result.Data!, "Cập nhật quyền thành công");
     }
 
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeletePermission(int id)
     {
-        var existing = await _dbContext.Permissions.FindAsync(id);
-        if (existing == null)
+        var result = await _permissionService.DeletePermissionAsync(id);
+        if (!result.Success)
         {
-            return NotFound();
+            return this.NotFoundResponse(result.ErrorMessage ?? "Không tìm thấy quyền");
         }
 
-        _dbContext.Permissions.Remove(existing);
-        await _dbContext.SaveChangesAsync();
-
-        return NoContent();
+        return this.NoContentResponse();
     }
 }
 

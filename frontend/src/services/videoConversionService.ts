@@ -1,4 +1,5 @@
 import api from './api'
+import { extractData, ApiResponse } from './apiResponse'
 
 export interface ConversionJob {
   jobId: string
@@ -25,20 +26,20 @@ export interface ConversionSettings {
 export const videoConversionService = {
   // Start conversion for a video file
   async startConversion(fileId: string, settings?: ConversionSettings): Promise<ConversionJob> {
-    const response = await api.post<ConversionJob>(`/video-conversion/${fileId}/convert`, settings || {})
-    return response.data
+    const response = await api.post<ApiResponse<ConversionJob>>(`/video-conversion/${fileId}/convert`, settings || {})
+    return extractData(response)
   },
 
   // Get job status
   async getJobStatus(jobId: string): Promise<ConversionJob> {
-    const response = await api.get<ConversionJob>(`/video-conversion/${jobId}`)
-    return response.data
+    const response = await api.get<ApiResponse<ConversionJob>>(`/video-conversion/${jobId}`)
+    return extractData(response)
   },
 
   // Get all jobs for current user
   async getUserJobs(userId: string): Promise<ConversionJob[]> {
-    const response = await api.get<ConversionJob[]>(`/video-conversion/user/${userId}`)
-    return response.data
+    const response = await api.get<ApiResponse<ConversionJob[]>>(`/video-conversion/user/${userId}`)
+    return extractData(response)
   },
 
   // Cancel a job

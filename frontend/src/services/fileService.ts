@@ -1,4 +1,5 @@
 import api from './api'
+import { extractData, ApiResponse } from './apiResponse'
 
 export interface FileResponse {
   id: string
@@ -107,7 +108,7 @@ async function uploadDirect(
 
   const speedCalculator = new SpeedCalculator()
 
-  const response = await api.post<FileResponse>('/files/upload', formData, {
+  const response = await api.post<ApiResponse<FileResponse>>('/files/upload', formData, {
     timeout: 600000, // 10 minutes for large files
     onUploadProgress: (progressEvent) => {
       if (progressEvent.total && onProgress) {
@@ -131,7 +132,7 @@ async function uploadDirect(
       }
     },
   })
-  return response.data
+  return extractData(response)
 }
 
 export const fileService = {
@@ -172,13 +173,13 @@ export const fileService = {
     const params: any = {}
     if (fileType) params.fileType = fileType
     if (folderId) params.folderId = folderId
-    const response = await api.get<FileResponse[]>('/files', { params })
-    return response.data
+    const response = await api.get<ApiResponse<FileResponse[]>>('/files', { params })
+    return extractData(response)
   },
 
   getById: async (id: string): Promise<FileResponse> => {
-    const response = await api.get<FileResponse>(`/files/${id}`)
-    return response.data
+    const response = await api.get<ApiResponse<FileResponse>>(`/files/${id}`)
+    return extractData(response)
   },
 
   download: async (id: string): Promise<Blob> => {

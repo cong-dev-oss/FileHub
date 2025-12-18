@@ -1,4 +1,5 @@
 import api from './api'
+import { extractData, ApiResponse } from './apiResponse'
 import { FileResponse } from './fileService'
 
 const CHUNK_SIZE = 10 * 1024 * 1024 // 10MB per chunk - optimal for large files
@@ -104,7 +105,7 @@ export async function uploadChunked(options: ChunkedUploadOptions): Promise<File
 
   try {
     // Initialize upload session
-    const initResponse = await api.post<{ uploadId: string }>('/files/upload/chunked/init', {
+    const initResponse = await api.post<ApiResponse<{ uploadId: string }>>('/files/upload/chunked/init', {
       fileName: file.name,
       fileSize: file.size,
       contentType: file.type,
@@ -113,7 +114,7 @@ export async function uploadChunked(options: ChunkedUploadOptions): Promise<File
       folderId,
     })
 
-    const sessionUploadId = initResponse.data.uploadId
+    const sessionUploadId = extractData(initResponse).uploadId
 
     // Upload chunks sequentially
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
@@ -180,11 +181,11 @@ export async function uploadChunked(options: ChunkedUploadOptions): Promise<File
     }
 
     // Finalize upload
-    const finalizeResponse = await api.post<FileResponse>('/files/upload/chunked/finalize', {
+    const finalizeResponse = await api.post<ApiResponse<FileResponse>>('/files/upload/chunked/finalize', {
       uploadId: sessionUploadId,
     })
 
-    return finalizeResponse.data
+    return extractData(finalizeResponse)
   } catch (error: any) {
     // Cancel upload on error
     try {

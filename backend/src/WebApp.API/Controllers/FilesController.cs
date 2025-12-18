@@ -5,8 +5,9 @@ using System.Security.Claims;
 using System.Collections.Concurrent;
 using System.IO;
 using Microsoft.Extensions.Configuration;
-using WebApp.Core.DTOs.Files;
-using WebApp.Core.Interfaces;
+using WebApp.API.Extensions;
+using WebApp.Application.DTOs.Files;
+using WebApp.Application.Interfaces;
 
 namespace WebApp.API.Controllers;
 
@@ -69,13 +70,13 @@ internal class PartialFileStream : Stream
 public class FilesController : ControllerBase
 {
     private readonly IFileService _fileService;
-    private readonly IUnitOfWork _unitOfWork;
+    private readonly IFolderService _folderService;
     private readonly IConfiguration _configuration;
 
-    public FilesController(IFileService fileService, IUnitOfWork unitOfWork, IConfiguration configuration)
+    public FilesController(IFileService fileService, IFolderService folderService, IConfiguration configuration)
     {
         _fileService = fileService;
-        _unitOfWork = unitOfWork;
+        _folderService = folderService;
         _configuration = configuration;
     }
 
@@ -84,25 +85,26 @@ public class FilesController : ControllerBase
     {
         if (file == null || file.Length == 0)
         {
-            return BadRequest(new { message = "No file uploaded" });
+            return this.BadRequestResponse("Không có tệp được tải lên", "NO_FILE_UPLOADED");
         }
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
         try
         {
             if (!_fileService.IsValidFileType(file.ContentType))
             {
-                return BadRequest(new { message = "Invalid file type" });
+                return this.BadRequestResponse("Loại tệp không hợp lệ", "INVALID_FILE_TYPE");
             }
 
             if (file.Length > _fileService.GetMaxFileSize())
             {
-                return BadRequest(new { message = $"File size exceeds maximum allowed size of {_fileService.GetMaxFileSize() / (1024 * 1024)}MB" });
+                var maxSizeMB = _fileService.GetMaxFileSize() / (1024 * 1024);
+                return this.BadRequestResponse($"Kích thước tệp vượt quá giới hạn cho phép là {maxSizeMB}MB", "FILE_SIZE_EXCEEDED");
             }
 
             using var stream = file.OpenReadStream();
@@ -111,14 +113,11 @@ public class FilesController : ControllerBase
             // Set folderId if provided and valid
             if (!string.IsNullOrWhiteSpace(folderId) && Guid.TryParse(folderId, out var parsedFolderId))
             {
-                var folder = await _unitOfWork.Folders.GetByIdAsync(parsedFolderId);
-                if (folder != null && !folder.IsDeleted && folder.UserId == userId)
-                {
-                    fileMetadata.FolderId = parsedFolderId;
-                    await _unitOfWork.Files.UpdateAsync(fileMetadata);
-                    await _unitOfWork.SaveChangesAsync();
-                }
+                var folderResult = await _folderService.GetFoldersAsync(userId, null);
+                // Check if folder exists and belongs to user (validation is done in service)
                 // If folder is invalid, still save the file but without folder assignment
+                var moveResult = await _fileService.MoveFileAsync(fileMetadata.Id, parsedFolderId, userId);
+                // Ignore move result if folder is invalid - file is already saved
             }
 
             var response = new FileResponseDto
@@ -135,7 +134,7 @@ public class FilesController : ControllerBase
                 FolderId = fileMetadata.FolderId
             };
 
-            return Ok(response);
+            return this.OkResponse(response, "Tải tệp lên thành công");
         }
         catch (Exception ex)
         {
@@ -151,13 +150,13 @@ public class FilesController : ControllerBase
         var fileMetadata = await _fileService.GetFileMetadataAsync(id);
         if (fileMetadata == null || fileMetadata.IsDeleted)
         {
-            return NotFound();
+            return this.NotFoundResponse("Không tìm thấy tệp");
         }
 
         var stream = await _fileService.DownloadFileAsync(id);
         if (stream == null)
         {
-            return NotFound();
+            return this.NotFoundResponse("Không tìm thấy tệp");
         }
 
         return File(stream, fileMetadata.ContentType, fileMetadata.OriginalFileName);
@@ -201,7 +200,7 @@ public class FilesController : ControllerBase
                 if (!User.Identity?.IsAuthenticated ?? true)
                 {
                     Console.WriteLine($"[StreamFile] Unauthorized - no valid token or authentication");
-                    return Unauthorized();
+                    return this.UnauthorizedResponse();
                 }
             }
         }
@@ -219,7 +218,7 @@ public class FilesController : ControllerBase
         var fileMetadata = await _fileService.GetFileMetadataAsync(id);
         if (fileMetadata == null || fileMetadata.IsDeleted)
         {
-            return NotFound();
+            return this.NotFoundResponse("Không tìm thấy tệp");
         }
 
         var filePath = fileMetadata.FilePath;
@@ -227,7 +226,7 @@ public class FilesController : ControllerBase
         {
             // Log file not found for debugging
             Console.WriteLine($"[StreamFile] File not found: {filePath} for fileId: {id}");
-            return NotFound();
+            return this.NotFoundResponse("Không tìm thấy tệp");
         }
 
         // Log streaming request for debugging
@@ -347,7 +346,7 @@ public class FilesController : ControllerBase
         var fileMetadata = await _fileService.GetFileMetadataAsync(id);
         if (fileMetadata == null || fileMetadata.IsDeleted)
         {
-            return NotFound();
+            return this.NotFoundResponse("Không tìm thấy tệp");
         }
 
         var response = new FileResponseDto
@@ -364,7 +363,7 @@ public class FilesController : ControllerBase
             FolderId = fileMetadata.FolderId
         };
 
-        return Ok(response);
+        return this.OkResponse(response, "Lấy thông tin tệp thành công");
     }
 
     [HttpGet]
@@ -373,7 +372,7 @@ public class FilesController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
         Core.Entities.FileType? type = null;
@@ -408,7 +407,7 @@ public class FilesController : ControllerBase
             FolderId = f.FolderId
         }).ToList();
 
-        return Ok(response);
+        return this.OkResponse(response, "Lấy danh sách tệp thành công");
     }
 
     [HttpDelete("{id}")]
@@ -417,27 +416,27 @@ public class FilesController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
         var fileMetadata = await _fileService.GetFileMetadataAsync(id);
         if (fileMetadata == null || fileMetadata.IsDeleted)
         {
-            return NotFound();
+            return this.NotFoundResponse("Không tìm thấy tệp");
         }
 
         if (fileMetadata.UserId != userId)
         {
-            return Forbid();
+            return this.ForbidResponse();
         }
 
         var result = await _fileService.DeleteFileAsync(id);
         if (!result)
         {
-            return NotFound();
+            return this.NotFoundResponse("Không tìm thấy tệp");
         }
 
-        return NoContent();
+        return this.NoContentResponse();
     }
 
     [HttpPost("{id}/move")]
@@ -446,40 +445,24 @@ public class FilesController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
-        var fileMetadata = await _fileService.GetFileMetadataAsync(id);
-        if (fileMetadata == null || fileMetadata.IsDeleted)
+        var result = await _fileService.MoveFileAsync(id, dto.FolderId, userId);
+        if (!result.Success)
         {
-            return NotFound();
-        }
-
-        if (fileMetadata.UserId != userId)
-        {
-            return Forbid();
-        }
-
-        if (dto.FolderId.HasValue)
-        {
-            var folder = await _unitOfWork.Folders.GetByIdAsync(dto.FolderId.Value);
-            if (folder == null || folder.IsDeleted || folder.UserId != userId)
+            if (result.ErrorMessage?.Contains("Không tìm thấy tệp") == true)
             {
-                return BadRequest(new { message = "Target folder not found" });
+                return this.NotFoundResponse(result.ErrorMessage);
             }
-
-            fileMetadata.FolderId = dto.FolderId;
+            if (result.ErrorMessage?.Contains("Không có quyền") == true)
+            {
+                return this.ForbidResponse(result.ErrorMessage);
+            }
+            return this.BadRequestResponse(result.ErrorMessage ?? "Di chuyển tệp thất bại", "MOVE_FILE_FAILED");
         }
-        else
-        {
-            fileMetadata.FolderId = null;
-        }
 
-        fileMetadata.UpdatedAt = DateTime.UtcNow;
-        await _unitOfWork.Files.UpdateAsync(fileMetadata);
-        await _unitOfWork.SaveChangesAsync();
-
-        return NoContent();
+        return this.NoContentResponse();
     }
 
     // Chunked upload endpoints for large files (up to 5GB)
@@ -492,17 +475,18 @@ public class FilesController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
         if (dto.FileSize > _fileService.GetMaxFileSize())
         {
-            return BadRequest(new { message = $"File size exceeds maximum allowed size of {_fileService.GetMaxFileSize() / (1024L * 1024 * 1024)}GB" });
+            var maxSizeGB = _fileService.GetMaxFileSize() / (1024L * 1024 * 1024);
+            return this.BadRequestResponse($"Kích thước tệp vượt quá giới hạn cho phép là {maxSizeGB}GB", "FILE_SIZE_EXCEEDED");
         }
 
         if (!_fileService.IsValidFileType(dto.ContentType))
         {
-            return BadRequest(new { message = "Invalid file type" });
+            return this.BadRequestResponse("Loại tệp không hợp lệ", "INVALID_FILE_TYPE");
         }
 
         var uploadId = Guid.NewGuid().ToString();
@@ -555,7 +539,8 @@ public class FilesController : ControllerBase
             CreatedAt = DateTime.UtcNow
         };
 
-        return Ok(new InitChunkedUploadResponseDto { UploadId = uploadId });
+        var response = new InitChunkedUploadResponseDto { UploadId = uploadId };
+        return this.OkResponse(response, "Khởi tạo tải lên chunk thành công");
     }
 
     [HttpPost("upload/chunked")]
@@ -570,22 +555,22 @@ public class FilesController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
         if (chunk == null || chunk.Length == 0)
         {
-            return BadRequest(new { message = "No chunk uploaded" });
+            return this.BadRequestResponse("Không có chunk được tải lên", "NO_CHUNK_UPLOADED");
         }
 
         if (!_uploadSessions.TryGetValue(uploadId, out var session) || session.UserId != userId)
         {
-            return BadRequest(new { message = "Invalid upload session" });
+            return this.BadRequestResponse("Phiên tải lên không hợp lệ", "INVALID_UPLOAD_SESSION");
         }
 
         if (chunkIndex < 0 || chunkIndex >= session.TotalChunks)
         {
-            return BadRequest(new { message = "Invalid chunk index" });
+            return this.BadRequestResponse("Chỉ số chunk không hợp lệ", "INVALID_CHUNK_INDEX");
         }
 
         try
@@ -620,11 +605,11 @@ public class FilesController : ControllerBase
             // Verify chunk was written correctly
             if (bytesWritten != actualChunkSize)
             {
-                return BadRequest(new { 
-                    message = "Chunk size mismatch", 
-                    expected = actualChunkSize, 
-                    written = bytesWritten 
-                });
+                var errors = new Dictionary<string, string[]>
+                {
+                    { "ChunkSize", new[] { $"Kích thước chunk không khớp. Mong đợi: {actualChunkSize}, Đã ghi: {bytesWritten}" } }
+                };
+                return this.BadRequestResponse("Kích thước chunk không khớp", errors, "CHUNK_SIZE_MISMATCH");
             }
 
             // Track actual bytes written
@@ -633,12 +618,13 @@ public class FilesController : ControllerBase
             session.UploadedChunks[chunkIndex] = true;
             session.UploadedChunkCount = session.UploadedChunks.Count(c => c);
 
-            return Ok(new { 
+            var response = new { 
                 chunkIndex = chunkIndex, 
                 uploadedChunks = session.UploadedChunkCount, 
                 totalChunks = session.TotalChunks,
                 totalBytesWritten = session.TotalBytesWritten
-            });
+            };
+            return this.OkResponse(response, "Tải chunk lên thành công");
         }
         catch (Exception ex)
         {
@@ -652,7 +638,7 @@ public class FilesController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
         if (!_uploadSessions.TryGetValue(dto.UploadId, out var session) || session.UserId != userId)
@@ -670,32 +656,29 @@ public class FilesController : ControllerBase
             var fileInfo = new FileInfo(session.FilePath);
             if (!fileInfo.Exists)
             {
-                return BadRequest(new { message = "File not found" });
+                return this.BadRequestResponse("Không tìm thấy tệp", "FILE_NOT_FOUND");
             }
 
             // Standard approach: Verify using actual bytes written, not file system size
             // File system size may differ due to allocation units, but bytes written should match
             if (session.TotalBytesWritten != session.FileSize)
             {
-                return BadRequest(new { 
-                    message = "File size mismatch - bytes written don't match expected size", 
-                    expected = session.FileSize, 
-                    actualBytesWritten = session.TotalBytesWritten,
-                    fileSystemSize = fileInfo.Length,
-                    difference = Math.Abs(session.TotalBytesWritten - session.FileSize)
-                });
+                var errors = new Dictionary<string, string[]>
+                {
+                    { "FileSize", new[] { $"Kích thước tệp không khớp. Mong đợi: {session.FileSize}, Đã ghi: {session.TotalBytesWritten}" } }
+                };
+                return this.BadRequestResponse("Kích thước tệp không khớp", errors, "FILE_SIZE_MISMATCH");
             }
 
             // Also verify file system size is reasonable (within 1MB tolerance for allocation units)
             var sizeDifference = Math.Abs(fileInfo.Length - session.FileSize);
             if (sizeDifference > 1024 * 1024) // More than 1MB difference
             {
-                return BadRequest(new { 
-                    message = "File system size mismatch", 
-                    expected = session.FileSize, 
-                    actual = fileInfo.Length,
-                    difference = sizeDifference
-                });
+                var errors = new Dictionary<string, string[]>
+                {
+                    { "FileSystemSize", new[] { $"Kích thước hệ thống tệp không khớp. Mong đợi: {session.FileSize}, Thực tế: {fileInfo.Length}" } }
+                };
+                return this.BadRequestResponse("Kích thước hệ thống tệp không khớp", errors, "FILE_SYSTEM_SIZE_MISMATCH");
             }
 
             // If file is larger than expected (due to pre-allocation or other issues), truncate it
@@ -708,23 +691,21 @@ public class FilesController : ControllerBase
                 fileInfo.Refresh();
             }
 
-            var fileMetadata = new Core.Entities.FileMetadata
-            {
-                FileName = session.UniqueFileName,
-                OriginalFileName = session.FileName,
-                FilePath = session.FilePath,
-                ContentType = session.ContentType,
-                FileSize = session.FileSize,
-                FileType = _fileService.GetFileTypeFromContentType(session.ContentType),
-                Description = session.Description,
-                UserId = userId,
-                CreatedBy = userId,
-                CreatedAt = DateTime.UtcNow,
-                FolderId = session.FolderId
-            };
+            var createResult = await _fileService.CreateFileFromChunkedUploadAsync(
+                session.FilePath,
+                session.FileName,
+                session.ContentType,
+                session.FileSize,
+                session.Description,
+                session.FolderId,
+                userId);
 
-            await _unitOfWork.Files.AddAsync(fileMetadata);
-            await _unitOfWork.SaveChangesAsync();
+            if (!createResult.Success)
+            {
+                return this.BadRequestResponse(createResult.ErrorMessage ?? "Tạo tệp từ chunked upload thất bại", "CREATE_FILE_FROM_CHUNKS_FAILED");
+            }
+
+            var fileMetadata = createResult.Data!;
 
             _uploadSessions.TryRemove(dto.UploadId, out _);
 
@@ -742,7 +723,7 @@ public class FilesController : ControllerBase
                 FolderId = fileMetadata.FolderId
             };
 
-            return Ok(response);
+            return this.OkResponse(response, "Tải tệp lên thành công");
         }
         catch (Exception ex)
         {
@@ -756,7 +737,7 @@ public class FilesController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
         if (_uploadSessions.TryGetValue(dto.UploadId, out var session) && session.UserId == userId)
@@ -775,7 +756,7 @@ public class FilesController : ControllerBase
             _uploadSessions.TryRemove(dto.UploadId, out _);
         }
 
-        return NoContent();
+        return this.NoContentResponse();
     }
 
     private class ChunkedUploadSession

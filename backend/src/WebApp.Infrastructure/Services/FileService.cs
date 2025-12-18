@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using WebApp.Application.DTOs.Common;
+using WebApp.Application.DTOs.Files;
+using WebApp.Application.Interfaces;
 using WebApp.Core.Entities;
 using WebApp.Core.Interfaces;
 
@@ -188,6 +191,80 @@ public class FileService : IFileService
     public long GetMaxFileSize()
     {
         return MaxFileSize;
+    }
+
+    public async Task<ServiceResult<bool>> MoveFileAsync(Guid fileId, Guid? folderId, string userId)
+    {
+        var fileMetadata = await _unitOfWork.Files.GetByIdAsync(fileId);
+        if (fileMetadata == null || fileMetadata.IsDeleted)
+        {
+            return ServiceResult<bool>.Fail("Không tìm thấy tệp");
+        }
+
+        if (fileMetadata.UserId != userId)
+        {
+            return ServiceResult<bool>.Fail("Không có quyền truy cập tệp này");
+        }
+
+        // Validate folder if provided
+        if (folderId.HasValue)
+        {
+            var folder = await _unitOfWork.Folders.GetByIdAsync(folderId.Value);
+            if (folder == null || folder.IsDeleted || folder.UserId != userId)
+            {
+                return ServiceResult<bool>.Fail("Không tìm thấy thư mục đích");
+            }
+        }
+
+        fileMetadata.FolderId = folderId;
+        fileMetadata.UpdatedAt = DateTime.UtcNow;
+        await _unitOfWork.Files.UpdateAsync(fileMetadata);
+        await _unitOfWork.SaveChangesAsync();
+
+        return ServiceResult<bool>.Ok(true);
+    }
+
+    public async Task<ServiceResult<FileMetadata>> CreateFileFromChunkedUploadAsync(string filePath, string fileName, string contentType, long fileSize, string? description, Guid? folderId, string userId)
+    {
+        if (!IsValidFileType(contentType))
+        {
+            return ServiceResult<FileMetadata>.Fail("Loại tệp không hợp lệ");
+        }
+
+        if (fileSize > MaxFileSize)
+        {
+            return ServiceResult<FileMetadata>.Fail($"Kích thước tệp vượt quá giới hạn cho phép là {MaxFileSize / (1024L * 1024 * 1024)}GB");
+        }
+
+        // Validate folder if provided
+        if (folderId.HasValue)
+        {
+            var folder = await _unitOfWork.Folders.GetByIdAsync(folderId.Value);
+            if (folder == null || folder.IsDeleted || folder.UserId != userId)
+            {
+                return ServiceResult<FileMetadata>.Fail("Không tìm thấy thư mục");
+            }
+        }
+
+        var fileMetadata = new FileMetadata
+        {
+            FileName = Path.GetFileName(filePath),
+            OriginalFileName = fileName,
+            FilePath = filePath,
+            ContentType = contentType,
+            FileSize = fileSize,
+            FileType = GetFileTypeFromContentType(contentType),
+            Description = description,
+            UserId = userId,
+            CreatedBy = userId,
+            CreatedAt = DateTime.UtcNow,
+            FolderId = folderId
+        };
+
+        await _unitOfWork.Files.AddAsync(fileMetadata);
+        await _unitOfWork.SaveChangesAsync();
+
+        return ServiceResult<FileMetadata>.Ok(fileMetadata);
     }
 }
 

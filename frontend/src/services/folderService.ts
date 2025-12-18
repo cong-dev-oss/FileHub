@@ -1,4 +1,5 @@
 import api from './api'
+import { extractData, ApiResponse } from './apiResponse'
 
 export interface FolderDto {
   id: string
@@ -19,19 +20,19 @@ export interface UpdateFolderDto {
 
 export const folderService = {
   getTree: async (): Promise<FolderDto[]> => {
-    const response = await api.get<FolderDto[]>('/folders/tree')
-    return response.data
+    const response = await api.get<ApiResponse<FolderDto[]>>('/folders/tree')
+    return extractData(response)
   },
 
   getAll: async (parentId?: string): Promise<FolderDto[]> => {
     const params = parentId ? { parentId } : {}
-    const response = await api.get<FolderDto[]>('/folders', { params })
-    return response.data
+    const response = await api.get<ApiResponse<FolderDto[]>>('/folders', { params })
+    return extractData(response)
   },
 
   create: async (dto: CreateFolderDto): Promise<FolderDto> => {
-    const response = await api.post<FolderDto>('/folders', dto)
-    return response.data
+    const response = await api.post<ApiResponse<FolderDto>>('/folders', dto)
+    return extractData(response)
   },
 
   update: async (id: string, dto: UpdateFolderDto): Promise<void> => {

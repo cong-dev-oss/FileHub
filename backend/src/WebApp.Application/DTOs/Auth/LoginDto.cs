@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace WebApp.Core.DTOs.Auth;
+namespace WebApp.Application.DTOs.Auth;
 
 public class LoginDto
 {
@@ -58,6 +58,3 @@ public class UserDto
     public List<string> Roles { get; set; } = new();
     public List<string> Permissions { get; set; } = new();
 }
-
-
-

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Scrutor;
 using WebApp.Core.Entities;
 using WebApp.Core.Interfaces;
 using WebApp.Infrastructure.Data;
@@ -117,9 +118,21 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Dependency Injection
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-builder.Services.AddScoped<IFileService, FileService>();
+// Dependency Injection - Auto-register services using Scrutor
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>(); // UnitOfWork đăng ký riêng vì không theo convention
+
+// Tự động đăng ký tất cả Application services theo convention: I{Name}Service -> {Name}Service
+// Scan từ Infrastructure.Services (implementations) và đăng ký với interfaces từ Application.Interfaces
+builder.Services.Scan(scan => scan
+    .FromAssemblyOf<FileService>() // Assembly chứa implementations (Infrastructure)
+    .AddClasses(classes => classes
+        .InNamespaceOf<FileService>() // Namespace: WebApp.Infrastructure.Services
+        .Where(type => 
+            type.Name.EndsWith("Service") && 
+            !type.IsAbstract &&
+            !typeof(Microsoft.Extensions.Hosting.BackgroundService).IsAssignableFrom(type))) // Loại trừ BackgroundService
+    .AsImplementedInterfaces() // Tự động tìm interfaces từ Application.Interfaces
+    .WithScopedLifetime());
 
 // SignalR for WebSocket notifications
 builder.Services.AddSignalR();

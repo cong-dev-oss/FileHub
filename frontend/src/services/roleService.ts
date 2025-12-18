@@ -1,4 +1,5 @@
 import api from './api'
+import { extractData, ApiResponse } from './apiResponse'
 
 export interface Role {
   id: string
@@ -16,8 +17,8 @@ export interface Permission {
 
 export const roleService = {
   getRoles: async (): Promise<Role[]> => {
-    const res = await api.get<Role[]>('/roles')
-    return res.data
+    const res = await api.get<ApiResponse<Role[]>>('/roles')
+    return extractData(res)
   },
 
   createRole: async (name: string): Promise<void> => {
@@ -31,13 +32,13 @@ export const roleService = {
   },
 
   getPermissions: async (): Promise<Permission[]> => {
-    const res = await api.get<Permission[]>('/permissions')
-    return res.data
+    const res = await api.get<ApiResponse<Permission[]>>('/permissions')
+    return extractData(res)
   },
 
   getRolePermissions: async (roleId: string): Promise<string[]> => {
-    const res = await api.get<string[]>(`/roles/${roleId}/permissions`)
-    return res.data
+    const res = await api.get<ApiResponse<string[]>>(`/roles/${roleId}/permissions`)
+    return extractData(res)
   },
 
   setRolePermissions: async (roleId: string, permissionCodes: string[]): Promise<void> => {

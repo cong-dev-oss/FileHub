@@ -60,7 +60,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     // Log successful responses for debugging
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log(`API ${response.config.method?.toUpperCase()} ${response.config.url}:`, response.data)
     }
     return response
@@ -74,6 +74,10 @@ api.interceptors.response.use(
       data: error.response?.data,
       message: error.message
     })
+    
+    // Handle standardized error response format
+    // The error will be properly formatted by errorHandler utility
+    // We keep the original error structure for components to handle
     
     if (error.response?.status === 401) {
       useAuthStore.getState().logout()

@@ -1,4 +1,4 @@
-namespace WebApp.Core.DTOs.Files;
+namespace WebApp.Application.DTOs.Files;
 
 public class FileUploadDto
 {
@@ -21,6 +21,3 @@ public class FileResponseDto
     public string? DownloadUrl { get; set; }
     public Guid? FolderId { get; set; }
 }
-
-
-

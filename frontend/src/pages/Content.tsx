@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import { useConfirm } from '../components/ConfirmDialog'
 import ContentDetail from '../components/ContentDetail'
+import { extractAllErrorMessages } from '../utils/errorHandler'
 
 export default function Content() {
   const navigate = useNavigate()
@@ -28,8 +29,9 @@ export default function Content() {
       queryClient.invalidateQueries({ queryKey: ['contents'] })
       toast.success('Content deleted successfully')
     },
-    onError: () => {
-      toast.error('Failed to delete content')
+    onError: (error: any) => {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => toast.error(msg))
     },
   })
 

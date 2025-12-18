@@ -1,4 +1,4 @@
-namespace WebApp.Core.DTOs.Files;
+namespace WebApp.Application.DTOs.Files;
 
 public class InitChunkedUploadDto
 {
@@ -28,3 +28,13 @@ public class CancelChunkedUploadDto
     public string UploadId { get; set; } = string.Empty;
 }
 
+public class ConversionSettingsDto
+{
+    public string? VideoCodec { get; set; }
+    public string? AudioCodec { get; set; }
+    public int? VideoBitrate { get; set; }
+    public int? AudioBitrate { get; set; }
+    public string? Resolution { get; set; }
+    public int? FrameRate { get; set; }
+    public string? Preset { get; set; }
+}

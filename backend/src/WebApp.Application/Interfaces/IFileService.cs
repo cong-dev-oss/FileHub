@@ -1,6 +1,8 @@
+using WebApp.Application.DTOs.Common;
+using WebApp.Application.DTOs.Files;
 using WebApp.Core.Entities;
 
-namespace WebApp.Core.Interfaces;
+namespace WebApp.Application.Interfaces;
 
 public interface IFileService
 {
@@ -12,5 +14,6 @@ public interface IFileService
     FileType GetFileTypeFromContentType(string contentType);
     bool IsValidFileType(string contentType);
     long GetMaxFileSize();
+    Task<ServiceResult<bool>> MoveFileAsync(Guid fileId, Guid? folderId, string userId);
+    Task<ServiceResult<FileMetadata>> CreateFileFromChunkedUploadAsync(string filePath, string fileName, string contentType, long fileSize, string? description, Guid? folderId, string userId);
 }
-

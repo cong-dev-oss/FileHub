@@ -1,9 +1,9 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using WebApp.Core.DTOs.Files;
-using WebApp.Core.Entities;
-using WebApp.Core.Interfaces;
+using WebApp.API.Extensions;
+using WebApp.Application.DTOs.Files;
+using WebApp.Application.Interfaces;
 
 namespace WebApp.API.Controllers;
 
@@ -12,11 +12,11 @@ namespace WebApp.API.Controllers;
 [Authorize]
 public class FoldersController : ControllerBase
 {
-    private readonly IUnitOfWork _unitOfWork;
+    private readonly IFolderService _folderService;
 
-    public FoldersController(IUnitOfWork unitOfWork)
+    public FoldersController(IFolderService folderService)
     {
-        _unitOfWork = unitOfWork;
+        _folderService = folderService;
     }
 
     [HttpGet("tree")]
@@ -25,35 +25,16 @@ public class FoldersController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
-        var folders = await _unitOfWork.Folders.FindAsync(f => f.UserId == userId && !f.IsDeleted);
-        var list = folders.ToList();
-
-        var lookup = list.ToDictionary(f => f.Id, f => new FolderDto
+        var result = await _folderService.GetFolderTreeAsync(userId);
+        if (!result.Success)
         {
-            Id = f.Id,
-            Name = f.Name,
-            ParentId = f.ParentId,
-            Children = new List<FolderDto>()
-        });
-
-        List<FolderDto> roots = new();
-        foreach (var folder in list)
-        {
-            var dto = lookup[folder.Id];
-            if (folder.ParentId.HasValue && lookup.TryGetValue(folder.ParentId.Value, out var parentDto))
-            {
-                parentDto.Children.Add(dto);
-            }
-            else
-            {
-                roots.Add(dto);
-            }
+            return this.BadRequestResponse(result.ErrorMessage ?? "Lỗi không xác định", "GET_FOLDER_TREE_FAILED");
         }
 
-        return Ok(roots);
+        return this.OkResponse(result.Data!, "Lấy cây thư mục thành công");
     }
 
     [HttpGet]
@@ -62,26 +43,16 @@ public class FoldersController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
-        var folders = await _unitOfWork.Folders.FindAsync(f =>
-            f.UserId == userId &&
-            !f.IsDeleted &&
-            f.ParentId == parentId);
+        var result = await _folderService.GetFoldersAsync(userId, parentId);
+        if (!result.Success)
+        {
+            return this.BadRequestResponse(result.ErrorMessage ?? "Lỗi không xác định", "GET_FOLDERS_FAILED");
+        }
 
-        var result = folders
-            .OrderBy(f => f.Name)
-            .Select(f => new FolderDto
-            {
-                Id = f.Id,
-                Name = f.Name,
-                ParentId = f.ParentId,
-                Children = new List<FolderDto>()
-            })
-            .ToList();
-
-        return Ok(result);
+        return this.OkResponse(result.Data!, "Lấy danh sách thư mục thành công");
     }
 
     [HttpPost]
@@ -89,45 +60,22 @@ public class FoldersController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return this.BadRequestResponse(ModelState);
         }
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
-        Folder? parent = null;
-        if (dto.ParentId.HasValue)
+        var result = await _folderService.CreateFolderAsync(dto, userId);
+        if (!result.Success)
         {
-            parent = await _unitOfWork.Folders.GetByIdAsync(dto.ParentId.Value);
-            if (parent == null || parent.IsDeleted || parent.UserId != userId)
-            {
-                return BadRequest(new { message = "Parent folder not found" });
-            }
+            return this.BadRequestResponse(result.ErrorMessage ?? "Tạo thư mục thất bại", "CREATE_FOLDER_FAILED");
         }
 
-        var folder = new Folder
-        {
-            Name = dto.Name,
-            ParentId = dto.ParentId,
-            UserId = userId,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        await _unitOfWork.Folders.AddAsync(folder);
-        await _unitOfWork.SaveChangesAsync();
-
-        var result = new FolderDto
-        {
-            Id = folder.Id,
-            Name = folder.Name,
-            ParentId = folder.ParentId,
-            Children = new List<FolderDto>()
-        };
-
-        return CreatedAtAction(nameof(GetFolders), new { parentId = folder.ParentId }, result);
+        return this.CreatedResponse(nameof(GetFolders), new { parentId = result.Data!.ParentId }, result.Data, "Tạo thư mục thành công");
     }
 
     [HttpPut("{id}")]
@@ -135,43 +83,22 @@ public class FoldersController : ControllerBase
     {
         if (!ModelState.IsValid)
         {
-            return BadRequest(ModelState);
+            return this.BadRequestResponse(ModelState);
         }
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
-        var folder = await _unitOfWork.Folders.GetByIdAsync(id);
-        if (folder == null || folder.IsDeleted || folder.UserId != userId)
+        var result = await _folderService.UpdateFolderAsync(id, dto, userId);
+        if (!result.Success)
         {
-            return NotFound();
+            return this.BadRequestResponse(result.ErrorMessage ?? "Cập nhật thư mục thất bại", "UPDATE_FOLDER_FAILED");
         }
 
-        if (dto.ParentId.HasValue)
-        {
-            if (dto.ParentId.Value == id)
-            {
-                return BadRequest(new { message = "Folder cannot be its own parent" });
-            }
-
-            var parent = await _unitOfWork.Folders.GetByIdAsync(dto.ParentId.Value);
-            if (parent == null || parent.IsDeleted || parent.UserId != userId)
-            {
-                return BadRequest(new { message = "Parent folder not found" });
-            }
-        }
-
-        folder.Name = dto.Name;
-        folder.ParentId = dto.ParentId;
-        folder.UpdatedAt = DateTime.UtcNow;
-
-        await _unitOfWork.Folders.UpdateAsync(folder);
-        await _unitOfWork.SaveChangesAsync();
-
-        return NoContent();
+        return this.NoContentResponse();
     }
 
     [HttpDelete("{id}")]
@@ -180,35 +107,16 @@ public class FoldersController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
-        var folder = await _unitOfWork.Folders.GetByIdAsync(id);
-        if (folder == null || folder.IsDeleted || folder.UserId != userId)
+        var result = await _folderService.DeleteFolderAsync(id, userId);
+        if (!result.Success)
         {
-            return NotFound();
+            return this.BadRequestResponse(result.ErrorMessage ?? "Xóa thư mục thất bại", "DELETE_FOLDER_FAILED");
         }
 
-        // Check if folder has children
-        var children = await _unitOfWork.Folders.FindAsync(f => f.ParentId == id && !f.IsDeleted);
-        if (children.Any())
-        {
-            return BadRequest(new { message = "Cannot delete folder that contains subfolders. Please delete or move subfolders first." });
-        }
-
-        // Check if folder has files
-        var files = await _unitOfWork.Files.FindAsync(f => f.FolderId == id && !f.IsDeleted);
-        if (files.Any())
-        {
-            return BadRequest(new { message = "Cannot delete folder that contains files. Please delete or move files first." });
-        }
-
-        folder.IsDeleted = true;
-        folder.UpdatedAt = DateTime.UtcNow;
-        await _unitOfWork.Folders.UpdateAsync(folder);
-        await _unitOfWork.SaveChangesAsync();
-
-        return NoContent();
+        return this.NoContentResponse();
     }
 }
 

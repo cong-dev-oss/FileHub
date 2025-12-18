@@ -2,10 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
+using WebApp.API.Extensions;
+using WebApp.Application.DTOs.Files;
+using WebApp.Application.Interfaces;
 using WebApp.Infrastructure.Hubs;
-using WebApp.Core.DTOs.Files;
-using WebApp.Core.Entities;
-using WebApp.Core.Interfaces;
 
 namespace WebApp.API.Controllers;
 
@@ -14,16 +14,16 @@ namespace WebApp.API.Controllers;
 [Authorize]
 public class VideoConversionController : ControllerBase
 {
-    private readonly IUnitOfWork _unitOfWork;
+    private readonly IVideoConversionService _videoConversionService;
     private readonly IHubContext<VideoConversionHub> _hubContext;
     private readonly ILogger<VideoConversionController> _logger;
 
     public VideoConversionController(
-        IUnitOfWork unitOfWork,
+        IVideoConversionService videoConversionService,
         IHubContext<VideoConversionHub> hubContext,
         ILogger<VideoConversionController> logger)
     {
-        _unitOfWork = unitOfWork;
+        _videoConversionService = videoConversionService;
         _hubContext = hubContext;
         _logger = logger;
     }
@@ -34,65 +34,32 @@ public class VideoConversionController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
-        var file = await _unitOfWork.Files.GetByIdAsync(fileId);
-        if (file == null || file.IsDeleted)
+        var result = await _videoConversionService.StartConversionAsync(fileId, settings, userId);
+        if (!result.Success)
         {
-            return NotFound(new { message = "File not found" });
+            if (result.ErrorMessage?.Contains("Không tìm thấy") == true)
+            {
+                return this.NotFoundResponse(result.ErrorMessage);
+            }
+            if (result.ErrorMessage?.Contains("Không có quyền") == true)
+            {
+                return this.ForbidResponse(result.ErrorMessage);
+            }
+            return this.BadRequestResponse(result.ErrorMessage ?? "Tạo công việc chuyển đổi thất bại", "START_CONVERSION_FAILED");
         }
 
-        if (file.FileType != FileType.Video)
+        var response = new
         {
-            return BadRequest(new { message = "File is not a video" });
-        }
-
-        if (file.UserId != userId)
-        {
-            return Forbid();
-        }
-
-        // Check if there's already a conversion job for this file
-        var existingJobs = await _unitOfWork.VideoConversionJobs.FindAsync(j => 
-            j.FileId == fileId && 
-            (j.Status == ConversionStatus.Pending || 
-             j.Status == ConversionStatus.Queued || 
-             j.Status == ConversionStatus.Processing));
-        
-        if (existingJobs.Any())
-        {
-            return BadRequest(new { message = "Conversion job already exists for this file" });
-        }
-
-        var job = new VideoConversionJob
-        {
-            FileId = fileId,
-            UserId = userId,
-            Status = ConversionStatus.Pending,
-            Progress = 0,
-            VideoCodec = settings?.VideoCodec ?? "libx264",
-            AudioCodec = settings?.AudioCodec ?? "aac",
-            VideoBitrate = settings?.VideoBitrate,
-            AudioBitrate = settings?.AudioBitrate ?? 128,
-            Resolution = settings?.Resolution,
-            FrameRate = settings?.FrameRate,
-            Preset = settings?.Preset ?? "medium"
+            jobId = result.Data!.JobId,
+            fileId = result.Data.FileId,
+            status = result.Data.Status,
+            progress = result.Data.Progress,
+            createdAt = result.Data.CreatedAt
         };
-
-        await _unitOfWork.VideoConversionJobs.AddAsync(job);
-        await _unitOfWork.SaveChangesAsync();
-
-        _logger.LogInformation("Video conversion job {JobId} created for file {FileId}", job.Id, fileId);
-
-        return Ok(new
-        {
-            jobId = job.Id,
-            fileId = job.FileId,
-            status = job.Status.ToString(),
-            progress = job.Progress,
-            createdAt = job.CreatedAt
-        });
+        return this.OkResponse(response, "Tạo công việc chuyển đổi thành công");
     }
 
     [HttpGet("{jobId}")]
@@ -101,32 +68,36 @@ public class VideoConversionController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
-        var job = await _unitOfWork.VideoConversionJobs.GetByIdAsync(jobId);
-        if (job == null)
+        var result = await _videoConversionService.GetJobStatusAsync(jobId, userId);
+        if (!result.Success)
         {
-            return NotFound();
+            if (result.ErrorMessage?.Contains("Không tìm thấy") == true)
+            {
+                return this.NotFoundResponse(result.ErrorMessage);
+            }
+            if (result.ErrorMessage?.Contains("Không có quyền") == true)
+            {
+                return this.ForbidResponse(result.ErrorMessage);
+            }
+            return this.BadRequestResponse(result.ErrorMessage ?? "Lỗi không xác định", "GET_JOB_STATUS_FAILED");
         }
 
-        if (job.UserId != userId)
+        var response = new
         {
-            return Forbid();
-        }
-
-        return Ok(new
-        {
-            jobId = job.Id,
-            fileId = job.FileId,
-            status = job.Status.ToString(),
-            progress = job.Progress,
-            errorMessage = job.ErrorMessage,
-            createdAt = job.CreatedAt,
-            startedAt = job.StartedAt,
-            completedAt = job.CompletedAt,
-            convertedFilePath = job.ConvertedFilePath
-        });
+            jobId = result.Data!.JobId,
+            fileId = result.Data.FileId,
+            status = result.Data.Status,
+            progress = result.Data.Progress,
+            errorMessage = result.Data.ErrorMessage,
+            createdAt = result.Data.CreatedAt,
+            startedAt = result.Data.StartedAt,
+            completedAt = result.Data.CompletedAt,
+            convertedFilePath = result.Data.ConvertedFilePath
+        };
+        return this.OkResponse(response, "Lấy trạng thái công việc thành công");
     }
 
     [HttpGet("user/{userId}")]
@@ -135,15 +106,20 @@ public class VideoConversionController : ControllerBase
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (currentUserId == null || currentUserId != userId)
         {
-            return Forbid();
+            return this.ForbidResponse();
         }
 
-        var jobs = await _unitOfWork.VideoConversionJobs.FindAsync(j => j.UserId == userId);
-        var jobsList = jobs.OrderByDescending(j => j.CreatedAt).Select(j => new
+        var result = await _videoConversionService.GetUserJobsAsync(userId);
+        if (!result.Success)
         {
-            jobId = j.Id,
+            return this.BadRequestResponse(result.ErrorMessage ?? "Lỗi không xác định", "GET_USER_JOBS_FAILED");
+        }
+
+        var jobsList = result.Data!.Select(j => new
+        {
+            jobId = j.JobId,
             fileId = j.FileId,
-            status = j.Status.ToString(),
+            status = j.Status,
             progress = j.Progress,
             errorMessage = j.ErrorMessage,
             createdAt = j.CreatedAt,
@@ -151,7 +127,7 @@ public class VideoConversionController : ControllerBase
             completedAt = j.CompletedAt
         });
 
-        return Ok(jobsList);
+        return this.OkResponse(jobsList, "Lấy danh sách công việc chuyển đổi thành công");
     }
 
     [HttpPost("{jobId}/cancel")]
@@ -160,50 +136,32 @@ public class VideoConversionController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
         {
-            return Unauthorized();
+            return this.UnauthorizedResponse();
         }
 
-        var job = await _unitOfWork.VideoConversionJobs.GetByIdAsync(jobId);
-        if (job == null)
+        var result = await _videoConversionService.CancelJobAsync(jobId, userId);
+        if (!result.Success)
         {
-            return NotFound();
+            if (result.ErrorMessage?.Contains("Không tìm thấy") == true)
+            {
+                return this.NotFoundResponse(result.ErrorMessage);
+            }
+            if (result.ErrorMessage?.Contains("Không có quyền") == true)
+            {
+                return this.ForbidResponse(result.ErrorMessage);
+            }
+            return this.BadRequestResponse(result.ErrorMessage ?? "Hủy công việc thất bại", "CANCEL_JOB_FAILED");
         }
-
-        if (job.UserId != userId)
-        {
-            return Forbid();
-        }
-
-        if (job.Status == ConversionStatus.Completed || job.Status == ConversionStatus.Failed)
-        {
-            return BadRequest(new { message = "Cannot cancel completed or failed job" });
-        }
-
-        job.Status = ConversionStatus.Cancelled;
-        job.CompletedAt = DateTime.UtcNow;
-        await _unitOfWork.VideoConversionJobs.UpdateAsync(job);
-        await _unitOfWork.SaveChangesAsync();
 
         await _hubContext.Clients.Group($"job_{jobId}")
             .SendAsync("JobStatusChanged", new
             {
-                jobId = job.Id,
-                status = job.Status.ToString(),
-                progress = job.Progress
+                jobId = jobId,
+                status = "Cancelled",
+                progress = 0
             });
 
-        return Ok(new { message = "Job cancelled successfully" });
+        return this.OkResponse(new { message = "Hủy công việc thành công" }, "Hủy công việc thành công");
     }
-}
-
-public class ConversionSettingsDto
-{
-    public string? VideoCodec { get; set; }
-    public string? AudioCodec { get; set; }
-    public int? VideoBitrate { get; set; }
-    public int? AudioBitrate { get; set; }
-    public string? Resolution { get; set; }
-    public int? FrameRate { get; set; }
-    public string? Preset { get; set; }
 }
 

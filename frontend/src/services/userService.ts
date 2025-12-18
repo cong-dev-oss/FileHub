@@ -1,4 +1,5 @@
 import api from './api'
+import { extractData, ApiResponse } from './apiResponse'
 
 export interface UserListItem {
   id: string
@@ -29,8 +30,8 @@ export interface CreateUserRequest {
 
 export const userService = {
   getUsers: async (): Promise<UserListItem[]> => {
-    const res = await api.get<UserListItem[]>('/users')
-    return res.data
+    const res = await api.get<ApiResponse<UserListItem[]>>('/users')
+    return extractData(res)
   },
 
   createUser: async (payload: CreateUserRequest): Promise<void> => {

@@ -1,5 +1,72 @@
-appsettings.Production.json
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio cache/options
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Build artifacts
+*.dll
+*.exe
+*.pdb
+*.cache
+*.deps.json
+*.runtimeconfig.json
+*.staticwebassets.endpoints.json
+
+# NuGet packages
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# App settings (keep base appsettings.json, ignore environment-specific)
+appsettings.*.json
+!appsettings.json
+
+# Launch settings (may contain local paths)
+Properties/launchSettings.json
+
+# User uploads
 Uploads/
 
+# Node modules (if using Swagger UI or similar)
+node_modules/
+package-lock.json
 
+# Rider
+.idea/
+*.sln.iml
 
+# macOS
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Logs
+*.log
+logs/

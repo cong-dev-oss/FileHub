@@ -1,4 +1,5 @@
 import api from './api'
+import { extractData, ApiResponse } from './apiResponse'
 
 export interface ContentDto {
   id: string
@@ -38,23 +39,23 @@ export const contentService = {
     if (contentType) params.contentType = contentType
     if (status) params.status = status
 
-    const response = await api.get<ContentDto[]>('/content', { params })
-    return response.data
+    const response = await api.get<ApiResponse<ContentDto[]>>('/content', { params })
+    return extractData(response)
   },
 
   getById: async (id: string): Promise<ContentDto> => {
-    const response = await api.get<ContentDto>(`/content/${id}`)
-    return response.data
+    const response = await api.get<ApiResponse<ContentDto>>(`/content/${id}`)
+    return extractData(response)
   },
 
   create: async (data: CreateContentDto): Promise<ContentDto> => {
-    const response = await api.post<ContentDto>('/content', data)
-    return response.data
+    const response = await api.post<ApiResponse<ContentDto>>('/content', data)
+    return extractData(response)
   },
 
   update: async (id: string, data: UpdateContentDto): Promise<ContentDto> => {
-    const response = await api.put<ContentDto>(`/content/${id}`, data)
-    return response.data
+    const response = await api.put<ApiResponse<ContentDto>>(`/content/${id}`, data)
+    return extractData(response)
   },
 
   delete: async (id: string): Promise<void> => {

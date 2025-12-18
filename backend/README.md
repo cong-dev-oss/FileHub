@@ -2,11 +2,12 @@
 
 Backend API được xây dựng với .NET 8.0, sử dụng Clean Architecture pattern.
 
-## Cấu trúc dự án
+## Cấu trúc dự án (Clean Architecture)
 
-- **WebApp.Core**: Chứa entities, interfaces, DTOs (Domain layer)
-- **WebApp.Infrastructure**: Chứa repositories, services, database context (Data layer)
-- **WebApp.API**: Chứa controllers, configuration (Presentation layer)
+- **WebApp.Core**: Domain layer - Entities và Domain interfaces (IRepository, IUnitOfWork)
+- **WebApp.Application**: Application layer - Application service interfaces và DTOs
+- **WebApp.Infrastructure**: Infrastructure layer - Implementations (Repositories, Services, DbContext)
+- **WebApp.API**: Presentation layer - Controllers và configuration
 
 ## Tính năng
 
