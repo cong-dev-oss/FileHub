@@ -1,14 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-
-interface User {
-  id: string
-  email: string
-  firstName: string
-  lastName: string
-  roles: string[]
-  permissions: string[]
-}
+import { User } from '../types'
+import { STORAGE_KEYS } from '../constants'
 
 interface AuthState {
   user: User | null
@@ -22,7 +15,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
@@ -30,19 +23,19 @@ export const useAuthStore = create<AuthState>()(
         set({ user, token, isAuthenticated: true }),
       logout: () =>
         set({ user: null, token: null, isAuthenticated: false }),
-      hasPermission: (permission: string) => {
-        const state = useAuthStore.getState()
+      hasPermission: (permission: string): boolean => {
+        const state = get()
         if (!state.user) return false
         return state.user.permissions?.includes(permission) ?? false
       },
-      hasAnyPermission: (permissions: string[]) => {
-        const state = useAuthStore.getState()
+      hasAnyPermission: (permissions: string[]): boolean => {
+        const state = get()
         if (!state.user) return false
         return permissions.some(p => state.user!.permissions?.includes(p))
       },
     }),
     {
-      name: 'auth-storage',
+      name: STORAGE_KEYS.AUTH,
     }
   )
 )

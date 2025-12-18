@@ -1,20 +1,10 @@
-// Standard API Response types matching backend ApiResponse<T> and ApiErrorResponse
+/**
+ * API Response Utilities
+ * Re-export từ types để maintain backward compatibility
+ */
 
-export interface ApiResponse<T> {
-  success: boolean
-  message: string
-  data: T
-  errorCode?: string
-  timestamp: string
-}
-
-export interface ApiErrorResponse {
-  success: false
-  message: string
-  errorCode?: string
-  errors?: Record<string, string[]>
-  timestamp: string
-}
+// Import và re-export types
+export type { ApiResponse, ApiErrorResponse } from '../types'
 
 /**
  * Extract data from ApiResponse wrapper

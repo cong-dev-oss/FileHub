@@ -1,9 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
+import { Row, Col, Card, Statistic, Typography, Space, List, Tag, Alert, Spin } from 'antd'
+import { 
+  FileTextOutlined, 
+  FolderOutlined, 
+  RiseOutlined, 
+  FileOutlined 
+} from '@ant-design/icons'
 import { useAuthStore } from '../store/authStore'
 import { fileService } from '../services/fileService'
 import { contentService } from '../services/contentService'
-import { FileText, FolderOpen, TrendingUp, Users } from 'lucide-react'
-import { format } from 'date-fns'
+import dayjs from 'dayjs'
+
+const { Title, Text } = Typography
 
 export default function Dashboard() {
   const { user } = useAuthStore()
@@ -20,38 +28,30 @@ export default function Dashboard() {
     retry: 1,
   })
 
-  // Log errors for debugging
-  if (filesError) {
-    console.error('Files error:', filesError)
-  }
-  if (contentsError) {
-    console.error('Contents error:', contentsError)
-  }
-
   const stats = [
     {
-      name: 'Total Files',
+      title: 'Tổng số Files',
       value: files.length,
-      icon: FolderOpen,
-      color: 'bg-blue-500',
+      prefix: <FolderOutlined />,
+      valueStyle: { color: '#3f8600' },
     },
     {
-      name: 'Total Content',
+      title: 'Tổng số Content',
       value: contents.length,
-      icon: FileText,
-      color: 'bg-green-500',
+      prefix: <FileTextOutlined />,
+      valueStyle: { color: '#1890ff' },
     },
     {
-      name: 'Published Content',
+      title: 'Content đã Publish',
       value: contents.filter(c => c.status === 'Published').length,
-      icon: TrendingUp,
-      color: 'bg-purple-500',
+      prefix: <RiseOutlined />,
+      valueStyle: { color: '#722ed1' },
     },
     {
-      name: 'Draft Content',
+      title: 'Content Draft',
       value: contents.filter(c => c.status === 'Draft').length,
-      icon: FileText,
-      color: 'bg-yellow-500',
+      prefix: <FileOutlined />,
+      valueStyle: { color: '#faad14' },
     },
   ]
 
@@ -59,118 +59,124 @@ export default function Dashboard() {
   const recentContents = contents.slice(0, 5)
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Welcome back, {user?.firstName} {user?.lastName}
-        </p>
-      </div>
+    <div style={{ background: '#fff', padding: 24, borderRadius: 8, minHeight: '100%' }}>
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <div>
+          <Title level={2} style={{ marginBottom: 8 }}>Dashboard</Title>
+          <Text type="secondary">
+            Chào mừng trở lại, {user?.firstName} {user?.lastName}
+          </Text>
+        </div>
 
       {/* Error Messages */}
       {(filesError || contentsError) && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm text-red-800">
-            {filesError && `Error loading files: ${filesError instanceof Error ? filesError.message : 'Unknown error'}`}
-            {contentsError && `Error loading content: ${contentsError instanceof Error ? contentsError.message : 'Unknown error'}`}
-          </p>
-        </div>
+        <Alert
+          message="Lỗi tải dữ liệu"
+          description={
+            <>
+              {filesError && `Lỗi tải files: ${filesError instanceof Error ? filesError.message : 'Lỗi không xác định'}`}
+              {contentsError && `Lỗi tải content: ${contentsError instanceof Error ? contentsError.message : 'Lỗi không xác định'}`}
+            </>
+          }
+          type="error"
+          showIcon
+          closable
+        />
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon
-          return (
-            <div key={stat.name} className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className={`${stat.color} p-3 rounded-md`}>
-                    <Icon className="h-6 w-6 text-white" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">
-                        {stat.name}
-                      </dt>
-                      <dd className="text-2xl font-semibold text-gray-900">
-                        {filesLoading || contentsLoading ? '...' : stat.value}
-                      </dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      <Row gutter={[16, 16]}>
+        {stats.map((stat, index) => (
+          <Col xs={24} sm={12} lg={6} key={index}>
+            <Card>
+              <Statistic
+                title={stat.title}
+                value={filesLoading || contentsLoading ? 0 : stat.value}
+                prefix={stat.prefix}
+                valueStyle={stat.valueStyle}
+                loading={filesLoading || contentsLoading}
+              />
+            </Card>
+          </Col>
+        ))}
+      </Row>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <Row gutter={[16, 16]}>
         {/* Recent Files */}
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Files</h3>
-            <div className="space-y-3">
-              {filesLoading ? (
-                <p className="text-sm text-gray-500">Loading...</p>
-              ) : filesError ? (
-                <p className="text-sm text-red-500">Error loading files</p>
-              ) : recentFiles.length === 0 ? (
-                <p className="text-sm text-gray-500">No files yet</p>
-              ) : (
-                recentFiles.map((file) => (
-                  <div key={file.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {file.originalFileName}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {file.fileType} • {(file.fileSize / 1024).toFixed(2)} KB
-                      </p>
-                    </div>
-                    <p className="text-xs text-gray-400 ml-4">
-                      {format(new Date(file.createdAt), 'MMM d')}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+        <Col xs={24} lg={12}>
+          <Card 
+            title="Files gần đây" 
+            loading={filesLoading}
+          >
+            {filesError ? (
+              <Alert message="Lỗi tải files" type="error" />
+            ) : recentFiles.length === 0 ? (
+              <Text type="secondary">Chưa có files nào</Text>
+            ) : (
+              <List
+                dataSource={recentFiles}
+                renderItem={(file) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      avatar={<FolderOutlined style={{ fontSize: 20 }} />}
+                      title={<Text strong>{file.originalFileName}</Text>}
+                      description={
+                        <Space>
+                          <Tag>{file.fileType}</Tag>
+                          <Text type="secondary">
+                            {(file.fileSize / 1024).toFixed(2)} KB
+                          </Text>
+                          <Text type="secondary">
+                            {dayjs(file.createdAt).format('DD/MM/YYYY')}
+                          </Text>
+                        </Space>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            )}
+          </Card>
+        </Col>
 
         {/* Recent Content */}
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Content</h3>
-            <div className="space-y-3">
-              {contentsLoading ? (
-                <p className="text-sm text-gray-500">Loading...</p>
-              ) : contentsError ? (
-                <p className="text-sm text-red-500">Error loading content</p>
-              ) : recentContents.length === 0 ? (
-                <p className="text-sm text-gray-500">No content yet</p>
-              ) : (
-                recentContents.map((content) => (
-                  <div key={content.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {content.title}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {content.contentType} • {content.status}
-                      </p>
-                    </div>
-                    <p className="text-xs text-gray-400 ml-4">
-                      {format(new Date(content.createdAt), 'MMM d')}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+        <Col xs={24} lg={12}>
+          <Card 
+            title="Content gần đây" 
+            loading={contentsLoading}
+          >
+            {contentsError ? (
+              <Alert message="Lỗi tải content" type="error" />
+            ) : recentContents.length === 0 ? (
+              <Text type="secondary">Chưa có content nào</Text>
+            ) : (
+              <List
+                dataSource={recentContents}
+                renderItem={(content) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      avatar={<FileTextOutlined style={{ fontSize: 20 }} />}
+                      title={<Text strong>{content.title}</Text>}
+                      description={
+                        <Space>
+                          <Tag>{content.contentType}</Tag>
+                          <Tag color={content.status === 'Published' ? 'green' : 'orange'}>
+                            {content.status}
+                          </Tag>
+                          <Text type="secondary">
+                            {dayjs(content.createdAt).format('DD/MM/YYYY')}
+                          </Text>
+                        </Space>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            )}
+          </Card>
+        </Col>
+      </Row>
+      </Space>
     </div>
   )
 }
-

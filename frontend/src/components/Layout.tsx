@@ -1,136 +1,245 @@
-import { Outlet, Link, useLocation } from 'react-router-dom'
-import { useAuthStore } from '../store/authStore'
-import { 
-  LayoutDashboard, 
-  FileText, 
-  FolderOpen, 
-  LogOut,
-  Menu,
-  X,
-  Shield,
-  Users
-} from 'lucide-react'
+import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Layout as AntLayout, Menu, Avatar, Dropdown, Button, Typography, Space, Badge } from 'antd'
+import type { MenuProps } from 'antd'
+import {
+  DashboardOutlined,
+  FolderOutlined,
+  FileTextOutlined,
+  UserOutlined,
+  SafetyOutlined,
+  LogoutOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  BellOutlined,
+} from '@ant-design/icons'
+import { useAuth } from '../hooks/useAuth'
+import { usePermissions } from '../hooks/usePermissions'
+import { ROUTES } from '../constants'
 import { useState } from 'react'
 
-export default function Layout() {
-  const { user, logout, user: currentUser } = useAuthStore()
-  const location = useLocation()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+const { Header, Sider, Content } = AntLayout
+const { Text } = Typography
 
-  const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Files', href: '/files', icon: FolderOpen },
-    { name: 'Content', href: '/content', icon: FileText },
-    // Chỉ hiển thị menu quản lý user/role cho Admin
-    ...(currentUser?.roles?.includes('Admin')
+export default function Layout() {
+  const { user, logout } = useAuth()
+  const { isAdmin } = usePermissions()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [collapsed, setCollapsed] = useState(false)
+
+  const menuItems: MenuProps['items'] = [
+    {
+      key: ROUTES.DASHBOARD,
+      icon: <DashboardOutlined />,
+      label: 'Dashboard',
+    },
+    {
+      key: ROUTES.FILES,
+      icon: <FolderOutlined />,
+      label: 'Files',
+    },
+    {
+      key: ROUTES.CONTENT,
+      icon: <FileTextOutlined />,
+      label: 'Content',
+    },
+    ...(isAdmin()
       ? [
-          { name: 'Users', href: '/users', icon: Users },
-          { name: 'Roles & Permissions', href: '/roles', icon: Shield },
+          {
+            type: 'divider' as const,
+          },
+          {
+            key: ROUTES.USERS,
+            icon: <UserOutlined />,
+            label: 'Users',
+          },
+          {
+            key: ROUTES.ROLES,
+            icon: <SafetyOutlined />,
+            label: 'Roles & Permissions',
+          },
         ]
       : []),
   ]
 
-  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/')
+  const userMenuItems: MenuProps['items'] = [
+    {
+      key: 'profile',
+      icon: <UserOutlined />,
+      label: 'Thông tin cá nhân',
+    },
+    {
+      type: 'divider' as const,
+    },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: 'Đăng xuất',
+      danger: true,
+    },
+  ]
+
+  const handleMenuClick = ({ key }: { key: string }) => {
+    navigate(key)
+  }
+
+  const handleUserMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'logout') {
+      logout()
+    } else if (key === 'profile') {
+      // Navigate to profile page if exists
+      // navigate('/profile')
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile sidebar */}
-      <div className={`fixed inset-0 z-40 lg:hidden ${sidebarOpen ? '' : 'hidden'}`}>
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
-        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
-          <div className="flex h-16 items-center justify-between px-4 border-b">
-            <div className="flex items-center space-x-2">
-              <FolderOpen className="h-6 w-6 text-primary-600" />
-              <h1 className="text-xl font-bold text-primary-600">File Hub</h1>
-            </div>
-            <button onClick={() => setSidebarOpen(false)} className="text-gray-500">
-              <X className="h-6 w-6" />
-            </button>
-          </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigation.map((item) => {
-              const Icon = item.icon
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-                    isActive(item.href)
-                      ? 'bg-primary-50 text-primary-600'
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <Icon className="mr-3 h-5 w-5" />
-                  {item.name}
-                </Link>
-              )
-            })}
-          </nav>
+    <AntLayout style={{ minHeight: '100vh', background: '#f0f2f5' }}>
+      <Sider
+        trigger={null}
+        collapsible
+        collapsed={collapsed}
+        width={260}
+        style={{
+          overflow: 'auto',
+          height: '100vh',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          background: '#fff',
+          boxShadow: '2px 0 8px rgba(0,0,0,0.15)',
+        }}
+        theme="light"
+      >
+        {/* Logo Section */}
+        <div
+          style={{
+            height: 64,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            padding: collapsed ? '0' : '0 24px',
+            borderBottom: '1px solid #f0f0f0',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          }}
+        >
+          {!collapsed ? (
+            <Space>
+              <FolderOutlined style={{ fontSize: 28, color: '#fff' }} />
+              <Text strong style={{ color: '#fff', fontSize: 20, fontWeight: 600 }}>
+                File Hub
+              </Text>
+            </Space>
+          ) : (
+            <FolderOutlined style={{ fontSize: 28, color: '#fff' }} />
+          )}
         </div>
-      </div>
 
-      {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
-          <div className="flex h-16 items-center px-4 border-b">
-            <div className="flex items-center space-x-2">
-              <FolderOpen className="h-6 w-6 text-primary-600" />
-              <h1 className="text-xl font-bold text-primary-600">File Hub</h1>
-            </div>
-          </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigation.map((item) => {
-              const Icon = item.icon
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-                    isActive(item.href)
-                      ? 'bg-primary-50 text-primary-600'
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <Icon className="mr-3 h-5 w-5" />
-                  {item.name}
-                </Link>
-              )
-            })}
-          </nav>
-        </div>
-      </div>
+        {/* Menu */}
+        <Menu
+          theme="light"
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          items={menuItems}
+          onClick={handleMenuClick}
+          style={{
+            borderRight: 0,
+            marginTop: 8,
+            background: 'transparent',
+          }}
+        />
+      </Sider>
 
-      {/* Main content */}
-      <div className="lg:pl-64">
-        {/* Top bar */}
-        <div className="sticky top-0 z-10 flex h-16 items-center justify-between bg-white border-b border-gray-200 px-4">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden text-gray-500"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
-          <div className="flex items-center space-x-4 ml-auto">
-            <span className="text-sm text-gray-700">
-              {user?.firstName} {user?.lastName}
-            </span>
-            <button
-              onClick={logout}
-              className="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md"
+      <AntLayout style={{ marginLeft: collapsed ? 80 : 260, transition: 'all 0.2s' }}>
+        {/* Header */}
+        <Header
+          style={{
+            padding: '0 24px',
+            background: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+          }}
+        >
+          <Button
+            type="text"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              fontSize: 18,
+              width: 48,
+              height: 48,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          />
+
+          <Space size="large">
+            <Badge count={0} showZero={false}>
+              <Button
+                type="text"
+                icon={<BellOutlined style={{ fontSize: 18 }} />}
+                style={{ width: 48, height: 48 }}
+              />
+            </Badge>
+
+            <Dropdown
+              menu={{
+                items: userMenuItems,
+                onClick: handleUserMenuClick,
+              }}
+              placement="bottomRight"
+              trigger={['click']}
             >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </button>
-          </div>
-        </div>
+              <Space
+                style={{
+                  cursor: 'pointer',
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  transition: 'all 0.2s',
+                }}
+                className="hover:bg-gray-50"
+              >
+                <Avatar
+                  style={{
+                    backgroundColor: '#667eea',
+                    verticalAlign: 'middle',
+                  }}
+                  size="default"
+                >
+                  {user?.firstName?.[0]?.toUpperCase()}
+                  {user?.lastName?.[0]?.toUpperCase()}
+                </Avatar>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <Text strong style={{ fontSize: 14, lineHeight: 1.2 }}>
+                    {user?.firstName} {user?.lastName}
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.2 }}>
+                    {user?.email}
+                  </Text>
+                </div>
+              </Space>
+            </Dropdown>
+          </Space>
+        </Header>
 
-        {/* Page content */}
-        <main className="p-6">
+        {/* Content */}
+        <Content
+          style={{
+            margin: '24px',
+            padding: 0,
+            minHeight: 280,
+            background: 'transparent',
+          }}
+        >
           <Outlet />
-        </main>
-      </div>
-    </div>
+        </Content>
+      </AntLayout>
+    </AntLayout>
   )
 }
-

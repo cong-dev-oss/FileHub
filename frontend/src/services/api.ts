@@ -1,35 +1,13 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
-
-// Use direct backend URL in development if proxy doesn't work
-// Option 1: Set VITE_API_URL in .env file: VITE_API_URL=http://localhost:5000/api
-// Option 2: Uncomment the line below to use direct backend URL
-const USE_DIRECT_BACKEND = false // Set to true if proxy doesn't work
-
-const getBaseURL = () => {
-  // Check if VITE_API_URL is set in environment
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL
-  }
-  
-  // Use direct backend URL if enabled
-  if (USE_DIRECT_BACKEND && import.meta.env.DEV) {
-    return 'http://localhost:5000/api'
-  }
-  
-  // In development, try proxy first
-  if (import.meta.env.DEV) {
-    return '/api'
-  }
-  
-  return '/api'
-}
+import { API_CONFIG } from '../config'
+import { ROUTES } from '../constants'
 
 const api = axios.create({
-  baseURL: getBaseURL(),
-  timeout: 600000, // 10 minutes for large file uploads
-  maxContentLength: Infinity,
-  maxBodyLength: Infinity,
+  baseURL: API_CONFIG.BASE_URL,
+  timeout: API_CONFIG.TIMEOUT,
+  maxContentLength: API_CONFIG.MAX_CONTENT_LENGTH,
+  maxBodyLength: API_CONFIG.MAX_BODY_LENGTH,
 })
 
 // Request interceptor to add token
@@ -81,7 +59,7 @@ api.interceptors.response.use(
     
     if (error.response?.status === 401) {
       useAuthStore.getState().logout()
-      window.location.href = '/login'
+      window.location.href = ROUTES.LOGIN
     }
     return Promise.reject(error)
   }
