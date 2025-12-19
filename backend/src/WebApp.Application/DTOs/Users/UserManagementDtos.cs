@@ -49,3 +49,4 @@ public class CreateUserDto
     /// </summary>
     public IList<string> Roles { get; set; } = new List<string>();
 }
+

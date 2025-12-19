@@ -1,6 +1,6 @@
-# WebApp Frontend
+# FileHub Frontend
 
-Ứng dụng frontend hiện đại được xây dựng với React 18, TypeScript, Vite, và Tailwind CSS. Ứng dụng cung cấp giao diện quản lý file, nội dung CMS, và quản lý người dùng với hệ thống phân quyền chi tiết.
+Ứng dụng frontend hiện đại được xây dựng với React 18, TypeScript, Vite, Ant Design và Tailwind CSS. Ứng dụng cung cấp giao diện quản lý file, nội dung CMS, và quản lý người dùng với hệ thống phân quyền chi tiết.
 
 ## 📋 Mục lục
 
@@ -8,9 +8,9 @@
 - [Yêu cầu hệ thống](#-yêu-cầu-hệ-thống)
 - [Cài đặt](#-cài-đặt)
 - [Cấu trúc dự án](#-cấu-trúc-dự-án)
+- [Tech Stack](#-tech-stack)
 - [Cấu hình](#-cấu-hình)
 - [Scripts](#-scripts)
-- [Kiến trúc](#-kiến-trúc)
 - [Tài liệu chi tiết](#-tài-liệu-chi-tiết)
 - [Phát triển](#-phát-triển)
 - [Triển khai](#-triển-khai)
@@ -28,18 +28,20 @@
 
 ### 📁 Quản lý File
 - ✅ Upload file đa định dạng (Word, Excel, PDF, Video, Image, Audio)
-- ✅ Chunked upload cho file lớn
+- ✅ Chunked upload cho file lớn (>50MB)
 - ✅ TUS protocol hỗ trợ resume upload
 - ✅ Download file
 - ✅ Xóa file
-- ✅ Quản lý thư mục (Folder)
+- ✅ Quản lý thư mục (Folder) với cây thư mục
+- ✅ Di chuyển file giữa các folder
 - ✅ Preview file (Image, Video)
 - ✅ Chuyển đổi video format
+- ✅ Upload progress tracking với speed và time remaining
 
 ### 📝 Quản lý Nội dung (CMS)
 - ✅ Tạo và chỉnh sửa content
 - ✅ Rich text editor
-- ✅ Quản lý trạng thái (Draft, Published)
+- ✅ Quản lý trạng thái (Draft, Published, Archived)
 - ✅ Filter và search content
 - ✅ Preview content
 
@@ -50,12 +52,15 @@
 - ✅ Dashboard thống kê
 
 ### 🎨 Giao diện
+- ✅ **Ant Design (antd)** - UI Component Library hiện đại
 - ✅ Responsive design
-- ✅ Modern UI với Tailwind CSS
-- ✅ Dark mode ready
-- ✅ Toast notifications
+- ✅ Modern sidebar với collapsible menu
+- ✅ Toast notifications (Ant Design message)
 - ✅ Loading states
 - ✅ Error handling
+- ✅ Table với pagination và sorting
+- ✅ Form validation
+- ✅ Modal dialogs
 
 ## 💻 Yêu cầu hệ thống
 
@@ -184,6 +189,39 @@ Dự án đã được tùy chỉnh với cấu trúc hiện đại và dễ mai
 
 Xem chi tiết tại [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md)
 
+## 🛠️ Tech Stack
+
+### Core Framework
+- **React 18.2.0**: UI framework với hooks và concurrent features
+- **TypeScript 5.2.2**: Type-safe JavaScript
+- **Vite 5.0.8**: Build tool và dev server nhanh
+
+### UI Library
+- **Ant Design 5.x**: UI Component Library hiện đại
+- **@ant-design/icons**: Icon library
+- **Tailwind CSS 3.3.6**: Utility-first CSS framework
+
+### Routing & Navigation
+- **React Router DOM 6.20.0**: Client-side routing
+- **Protected Routes**: Route guards với permission checking
+
+### State Management
+- **Zustand 4.4.7**: Lightweight state management cho global state
+- **TanStack React Query 5.12.2**: Server state management và caching
+
+### HTTP & API
+- **Axios 1.6.2**: HTTP client với interceptors
+- **SignalR 10.0.0**: Real-time communication
+
+### Forms & Validation
+- **React Hook Form 7.48.2**: Form state management
+- **Ant Design Form**: Form components với validation
+
+### Utilities
+- **dayjs**: Date manipulation
+- **date-fns**: Date formatting utilities
+- **lucide-react**: Additional icons (nếu cần)
+
 ## ⚙️ Cấu hình
 
 ### Vite Configuration
@@ -194,6 +232,13 @@ File `vite.config.ts` cấu hình:
 - Port: 3000
 - Proxy timeout: 5 phút (cho upload file lớn)
 
+### Ant Design Configuration
+
+File `main.tsx` cấu hình:
+- ConfigProvider với locale tiếng Việt
+- Theme customization
+- Global message/notification configuration
+
 ### TypeScript Configuration
 
 File `tsconfig.json` cấu hình:
@@ -201,10 +246,6 @@ File `tsconfig.json` cấu hình:
 - Strict mode enabled
 - JSX: react-jsx
 - Module resolution: bundler
-
-### Tailwind CSS
-
-File `tailwind.config.js` cấu hình Tailwind CSS cho styling.
 
 ## 📜 Scripts
 
@@ -234,45 +275,6 @@ npm run lint         # Chạy ESLint
 
 ## 🏗️ Kiến trúc
 
-### Tech Stack
-
-- **Framework**: React 18.2.0
-- **Language**: TypeScript 5.2.2
-- **Build Tool**: Vite 5.0.8
-- **Routing**: React Router DOM 6.20.0
-- **State Management**: Zustand 4.4.7
-- **Data Fetching**: TanStack React Query 5.12.2
-- **HTTP Client**: Axios 1.6.2
-- **Forms**: React Hook Form 7.48.2
-- **Styling**: Tailwind CSS 3.3.6
-- **Icons**: Lucide React 0.294.0
-- **Notifications**: React Hot Toast 2.4.1
-- **Real-time**: SignalR 10.0.0
-
-### Kiến trúc tổng quan
-
-```
-┌─────────────────────────────────────────┐
-│           React Components              │
-│  (Pages, Components, Layout)           │
-└──────────────┬──────────────────────────┘
-               │
-┌──────────────▼──────────────────────────┐
-│        State Management                 │
-│  (Zustand Stores, React Query)         │
-└──────────────┬──────────────────────────┘
-               │
-┌──────────────▼──────────────────────────┐
-│         Service Layer                   │
-│  (API Services, Axios Instance)        │
-└──────────────┬──────────────────────────┘
-               │
-┌──────────────▼──────────────────────────┐
-│         Backend API                     │
-│  (http://localhost:5000/api)           │
-└─────────────────────────────────────────┘
-```
-
 ### Design Patterns
 
 - **Component-based Architecture**: Tách biệt components và pages
@@ -291,14 +293,16 @@ Xem chi tiết tại [ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 - **[DEVELOPMENT.md](./docs/DEVELOPMENT.md)** - Hướng dẫn phát triển
 - **[DEPLOYMENT.md](./docs/DEPLOYMENT.md)** - Hướng dẫn triển khai
 - **[CONTRIBUTING.md](./docs/CONTRIBUTING.md)** - Hướng dẫn đóng góp
+- **[PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md)** - Cấu trúc dự án chi tiết
 
 ## 🔧 Phát triển
 
 ### Thêm Component mới
 
 1. Tạo file trong `src/components/`
-2. Export component
-3. Import và sử dụng trong pages
+2. Sử dụng Ant Design components
+3. Export component
+4. Import và sử dụng trong pages
 
 ### Thêm Service mới
 
@@ -309,8 +313,8 @@ Xem chi tiết tại [ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 ### Thêm Page mới
 
 1. Tạo file trong `src/pages/`
-2. Thêm route trong `App.tsx`
-3. Thêm navigation link trong `Layout.tsx` (nếu cần)
+2. Thêm route trong `src/routes/index.tsx`
+3. Menu sẽ tự động hiển thị (nếu cần)
 
 Xem chi tiết tại [DEVELOPMENT.md](./docs/DEVELOPMENT.md)
 
@@ -347,14 +351,6 @@ Xem chi tiết tại [DEPLOYMENT.md](./docs/DEPLOYMENT.md)
 
 Chúng tôi hoan nghênh mọi đóng góp! Vui lòng đọc [CONTRIBUTING.md](./docs/CONTRIBUTING.md) để biết chi tiết về quy trình đóng góp.
 
-### Quy trình đóng góp
-
-1. Fork repository
-2. Tạo feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Mở Pull Request
-
 ## 🐛 Troubleshooting
 
 ### Lỗi kết nối API
@@ -387,5 +383,6 @@ MIT
 
 - React Team
 - Vite Team
+- Ant Design Team
 - Tailwind CSS Team
 - Tất cả các contributors

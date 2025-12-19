@@ -21,3 +21,4 @@ public class FileResponseDto
     public string? DownloadUrl { get; set; }
     public Guid? FolderId { get; set; }
 }
+
