@@ -17,6 +17,14 @@ public class ApplicationDbContext : IdentityDbContext<User>
     public DbSet<ContentFile> ContentFiles { get; set; }
     public DbSet<VideoConversionJob> VideoConversionJobs { get; set; }
 
+    // Chat
+    public DbSet<ChatRoom> ChatRooms { get; set; }
+    public DbSet<ChatRoomMember> ChatRoomMembers { get; set; }
+    public DbSet<Message> Messages { get; set; }
+    public DbSet<MessageAttachment> MessageAttachments { get; set; }
+    public DbSet<MessageNotification> MessageNotifications { get; set; }
+    public DbSet<MessageAutoDeleteSetting> MessageAutoDeleteSettings { get; set; }
+
     // RBAC
     public DbSet<Permission> Permissions { get; set; }
     public DbSet<RolePermission> RolePermissions { get; set; }
@@ -133,6 +141,123 @@ public class ApplicationDbContext : IdentityDbContext<User>
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // ChatRoom configuration
+        builder.Entity<ChatRoom>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.HasIndex(e => e.CreatedById);
+            entity.HasIndex(e => e.RoomType);
+            entity.HasIndex(e => e.IsActive);
+
+            entity.HasOne(e => e.CreatedBy)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedById)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ChatRoomMember configuration
+        builder.Entity<ChatRoomMember>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.ChatRoomId, e.UserId }).IsUnique();
+            entity.HasIndex(e => e.ChatRoomId);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.IsActive);
+
+            entity.HasOne(e => e.ChatRoom)
+                .WithMany(r => r.Members)
+                .HasForeignKey(e => e.ChatRoomId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Message configuration
+        builder.Entity<Message>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Content).IsRequired().HasMaxLength(5000);
+            entity.HasIndex(e => e.SenderId);
+            entity.HasIndex(e => e.ReceiverId);
+            entity.HasIndex(e => e.ChatRoomId);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.IsDeleted);
+
+            entity.HasOne(e => e.Sender)
+                .WithMany()
+                .HasForeignKey(e => e.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Receiver)
+                .WithMany()
+                .HasForeignKey(e => e.ReceiverId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.ChatRoom)
+                .WithMany(r => r.Messages)
+                .HasForeignKey(e => e.ChatRoomId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.ReplyToMessage)
+                .WithMany()
+                .HasForeignKey(e => e.ReplyToMessageId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // MessageAttachment configuration
+        builder.Entity<MessageAttachment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.FileName).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.FilePath).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.ContentType).IsRequired().HasMaxLength(100);
+
+            entity.HasOne(e => e.Message)
+                .WithMany(m => m.Attachments)
+                .HasForeignKey(e => e.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // MessageNotification configuration
+        builder.Entity<MessageNotification>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.MessageId);
+            entity.HasIndex(e => e.IsRead);
+            entity.HasIndex(e => e.CreatedAt);
+
+            entity.HasOne(e => e.Message)
+                .WithMany()
+                .HasForeignKey(e => e.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // MessageAutoDeleteSetting configuration
+        builder.Entity<MessageAutoDeleteSetting>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.UserId).IsUnique();
+            entity.HasIndex(e => e.IsEnabled);
+            entity.Property(e => e.Period).IsRequired();
+            entity.Property(e => e.IsEnabled).HasDefaultValue(false);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -9,6 +9,8 @@ public interface IUnitOfWork : IDisposable
     IRepository<Entities.ContentFile> ContentFiles { get; }
     IRepository<Entities.VideoConversionJob> VideoConversionJobs { get; }
     
+    IRepository<T> GetRepository<T>() where T : class;
+    
     Task<int> SaveChangesAsync();
     Task BeginTransactionAsync();
     Task CommitTransactionAsync();

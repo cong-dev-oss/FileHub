@@ -47,7 +47,7 @@ public class UsersController : ControllerBase
             return this.BadRequestResponse(result.ErrorMessage ?? "Tạo người dùng thất bại", "CREATE_USER_FAILED");
         }
 
-        return this.CreatedResponse(nameof(GetUserById), new { id = ((dynamic)result.Data!).Id }, result.Data!, "Tạo người dùng thành công");
+        return this.CreatedResponse(nameof(GetUserById), new { id = result.Data!.Id }, result.Data!, "Tạo người dùng thành công");
     }
 
     [HttpDelete("{id}")]

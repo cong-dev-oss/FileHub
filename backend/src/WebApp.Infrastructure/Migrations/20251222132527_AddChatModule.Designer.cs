@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WebApp.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using WebApp.Infrastructure.Data;
 namespace WebApp.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251222132527_AddChatModule")]
+    partial class AddChatModule
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -463,9 +466,6 @@ namespace WebApp.Infrastructure.Migrations
                     b.Property<string>("ReceiverId")
                         .HasColumnType("nvarchar(450)");
 
-                    b.Property<Guid?>("ReplyToMessageId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("SenderId")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
@@ -479,8 +479,6 @@ namespace WebApp.Infrastructure.Migrations
                     b.HasIndex("IsDeleted");
 
                     b.HasIndex("ReceiverId");
-
-                    b.HasIndex("ReplyToMessageId");
 
                     b.HasIndex("SenderId");
 
@@ -522,43 +520,6 @@ namespace WebApp.Infrastructure.Migrations
                     b.HasIndex("MessageId");
 
                     b.ToTable("MessageAttachments");
-                });
-
-            modelBuilder.Entity("WebApp.Core.Entities.MessageAutoDeleteSetting", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
-
-                    b.Property<int>("Period")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("PeriodValue")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IsEnabled");
-
-                    b.HasIndex("UserId")
-                        .IsUnique();
-
-                    b.ToTable("MessageAutoDeleteSettings");
                 });
 
             modelBuilder.Entity("WebApp.Core.Entities.MessageNotification", b =>
@@ -972,11 +933,6 @@ namespace WebApp.Infrastructure.Migrations
                         .HasForeignKey("ReceiverId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("WebApp.Core.Entities.Message", "ReplyToMessage")
-                        .WithMany()
-                        .HasForeignKey("ReplyToMessageId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("WebApp.Core.Entities.User", "Sender")
                         .WithMany()
                         .HasForeignKey("SenderId")
@@ -986,8 +942,6 @@ namespace WebApp.Infrastructure.Migrations
                     b.Navigation("ChatRoom");
 
                     b.Navigation("Receiver");
-
-                    b.Navigation("ReplyToMessage");
 
                     b.Navigation("Sender");
                 });
@@ -1001,17 +955,6 @@ namespace WebApp.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Message");
-                });
-
-            modelBuilder.Entity("WebApp.Core.Entities.MessageAutoDeleteSetting", b =>
-                {
-                    b.HasOne("WebApp.Core.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("WebApp.Core.Entities.MessageNotification", b =>

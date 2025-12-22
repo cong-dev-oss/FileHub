@@ -5,7 +5,7 @@ namespace WebApp.Application.Interfaces;
 
 public interface IUserService
 {
-    Task<ServiceResult<object>> CreateUserAsync(CreateUserDto dto, string currentUserId);
+    Task<ServiceResult<UserListItemDto>> CreateUserAsync(CreateUserDto dto, string currentUserId);
     Task<ServiceResult<bool>> DeleteUserAsync(string id, string currentUserId);
     Task<ServiceResult<List<UserListItemDto>>> GetUsersAsync();
     Task<ServiceResult<UserListItemDto>> GetUserByIdAsync(string id);

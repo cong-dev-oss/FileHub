@@ -1,9 +1,35 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect, useRef } from 'react'
-import { X, Calendar, User, FileText, Tag, Eye, Edit, Trash2, Volume2, VolumeX } from 'lucide-react'
+import { 
+  Typography, 
+  Tag, 
+  Space, 
+  Button, 
+  Divider, 
+  Descriptions, 
+  Spin,
+  Alert,
+  Card,
+  Tooltip,
+  message
+} from 'antd'
+import {
+  CalendarOutlined,
+  UserOutlined,
+  FileTextOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SoundOutlined,
+  PauseCircleOutlined,
+  StopOutlined,
+  CopyOutlined,
+} from '@ant-design/icons'
 import { format } from 'date-fns'
 import { contentService, ContentDto } from '../services/contentService'
 import { fileService } from '../services/fileService'
+import dayjs from 'dayjs'
+
+const { Title, Text, Paragraph } = Typography
 
 interface ContentDetailProps {
   contentId: string
@@ -16,6 +42,7 @@ export default function ContentDetail({ contentId, onClose, onEdit, onDelete }: 
   const [isReading, setIsReading] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null)
+  
   const { data: content, isLoading, error } = useQuery({
     queryKey: ['content', contentId],
     queryFn: () => contentService.getById(contentId),
@@ -113,14 +140,18 @@ export default function ContentDetail({ contentId, onClose, onEdit, onDelete }: 
     }
   }, [contentId])
 
+  // Copy to clipboard function
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text)
+    message.success(`Đã sao chép ${label}`)
+  }
+
   if (isLoading) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full mx-4">
-          <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-          </div>
-          <p className="mt-4 text-center text-gray-600">Đang tải nội dung...</p>
+      <div style={{ textAlign: 'center', padding: '40px 0' }}>
+        <Spin size="large" />
+        <div style={{ marginTop: 16 }}>
+          <Text type="secondary">Đang tải nội dung...</Text>
         </div>
       </div>
     )
@@ -128,283 +159,226 @@ export default function ContentDetail({ contentId, onClose, onEdit, onDelete }: 
 
   if (error || !content) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full mx-4">
-          <div className="text-center">
-            <div className="text-red-500 text-4xl mb-4">⚠️</div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Không tìm thấy nội dung</h3>
-            <p className="text-gray-600 mb-6">Nội dung này không tồn tại hoặc đã bị xóa.</p>
-            <button
-              onClick={onClose}
-              className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-            >
-              Đóng
-            </button>
-          </div>
-        </div>
-      </div>
+      <Alert
+        message="Không tìm thấy nội dung"
+        description="Nội dung này không tồn tại hoặc đã bị xóa."
+        type="error"
+        showIcon
+        action={
+          <Button size="small" onClick={onClose}>
+            Đóng
+          </Button>
+        }
+      />
     )
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Published':
-        return 'bg-green-100 text-green-800 border-green-200'
-      case 'Draft':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'Archived':
-        return 'bg-gray-100 text-gray-800 border-gray-200'
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
-    }
-  }
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'Page':
-        return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'Post':
-        return 'bg-purple-100 text-purple-800 border-purple-200'
-      case 'Media':
-        return 'bg-pink-100 text-pink-800 border-pink-200'
-      case 'Custom':
-        return 'bg-indigo-100 text-indigo-800 border-indigo-200'
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
-    }
-  }
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div 
-        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-300"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div style={{ maxHeight: '70vh', overflowY: 'auto', padding: '4px' }}>
+      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-5 flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-2xl font-bold text-white truncate">{content.title}</h2>
-            {content.description && (
-              <p className="text-primary-100 text-sm mt-1 line-clamp-2">{content.description}</p>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="ml-4 text-white/90 hover:text-white hover:bg-white/20 rounded-full p-2 transition-colors touch-manipulation flex-shrink-0"
-            aria-label="Close"
-          >
-            <X size={24} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">
-          {/* Meta Information */}
-          <div className="border-b border-gray-200 bg-gray-50 px-4 md:px-6 py-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Type */}
-              <div className="flex items-center gap-2">
-                <Tag className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                <div>
-                  <div className="text-xs text-gray-500">Loại</div>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getTypeColor(content.contentType)}`}>
-                    {content.contentType}
-                  </span>
-                </div>
-              </div>
-
-              {/* Status */}
-              <div className="flex items-center gap-2">
-                <Eye className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                <div>
-                  <div className="text-xs text-gray-500">Trạng thái</div>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(content.status)}`}>
-                    {content.status}
-                  </span>
-                </div>
-              </div>
-
-              {/* Created Date */}
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                <div>
-                  <div className="text-xs text-gray-500">Ngày tạo</div>
-                  <div className="text-sm font-medium text-gray-900">
-                    {format(new Date(content.createdAt), 'dd/MM/yyyy HH:mm')}
-                  </div>
-                </div>
-              </div>
-
-              {/* Updated Date */}
-              {content.updatedAt && (
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                  <div>
-                    <div className="text-xs text-gray-500">Cập nhật</div>
-                    <div className="text-sm font-medium text-gray-900">
-                      {format(new Date(content.updatedAt), 'dd/MM/yyyy HH:mm')}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Published Date */}
-            {content.publishedAt && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-green-500 flex-shrink-0" />
-                  <div>
-                    <div className="text-xs text-gray-500">Ngày xuất bản</div>
-                    <div className="text-sm font-medium text-green-700">
-                      {format(new Date(content.publishedAt), 'dd/MM/yyyy HH:mm')}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Created By */}
-            {content.createdBy && (
-              <div className="mt-3 flex items-center gap-2">
-                <User className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                <div>
-                  <div className="text-xs text-gray-500">Người tạo</div>
-                  <div className="text-sm font-medium text-gray-900">{content.createdBy}</div>
-                </div>
-              </div>
-            )}
-
-            {/* Slug */}
-            <div className="mt-3 flex items-center gap-2">
-              <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs text-gray-500">Slug</div>
-                <div className="text-sm font-mono text-gray-900 truncate bg-white px-2 py-1 rounded border border-gray-200">
-                  {content.slug}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Description */}
+        <div>
+          <Title level={4} style={{ marginBottom: 4, wordBreak: 'break-word' }}>
+            {content.title}
+          </Title>
           {content.description && (
-            <div className="px-4 md:px-6 py-4 border-b border-gray-200">
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Mô tả</h3>
-              <p className="text-gray-600 leading-relaxed">{content.description}</p>
-            </div>
+            <Paragraph type="secondary" style={{ marginBottom: 0, wordBreak: 'break-word' }}>
+              {content.description}
+            </Paragraph>
           )}
+        </div>
 
-          {/* Body Content */}
-          <div className="px-4 md:px-6 py-4 md:py-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary-600" />
-                Nội dung
-              </h3>
-              {content && content.body && (
-                <div className="flex items-center gap-2">
-                  {isReading ? (
-                    <>
-                      <button
-                        onClick={togglePause}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 active:bg-yellow-700 transition-colors touch-manipulation text-sm"
-                        title={isPaused ? 'Tiếp tục đọc' : 'Tạm dừng'}
-                      >
-                        {isPaused ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-                        <span>{isPaused ? 'Tiếp tục' : 'Tạm dừng'}</span>
-                      </button>
-                      <button
-                        onClick={stopReading}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500 text-white rounded-md hover:bg-red-600 active:bg-red-700 transition-colors touch-manipulation text-sm"
-                        title="Dừng đọc"
-                      >
-                        <VolumeX className="h-4 w-4" />
-                        <span>Dừng</span>
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={startReading}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 active:bg-green-700 transition-colors touch-manipulation text-sm"
-                      title="Đọc nội dung"
-                    >
-                      <Volume2 className="h-4 w-4" />
-                      <span>Đọc</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-            {content.body ? (
-              <div 
-                className="prose prose-sm max-w-none text-gray-700 leading-relaxed prose-headings:font-bold prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:my-4 prose-p:pl-0 prose-p:pr-0 prose-a:text-primary-600 prose-a:no-underline hover:prose-a:underline prose-strong:text-gray-900 prose-code:text-primary-700 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-blockquote:border-primary-300 prose-blockquote:text-gray-600 prose-img:rounded-lg prose-img:shadow-md whitespace-pre-wrap break-words"
-                style={{ paddingLeft: 0, paddingRight: 0, marginLeft: 0, marginRight: 0 }}
-                dangerouslySetInnerHTML={{ __html: content.body }}
-              />
-            ) : (
-              <p className="text-gray-500 italic">Không có nội dung</p>
-            )}
-          </div>
+        <Divider style={{ margin: '12px 0' }} />
 
-          {/* Attached Files */}
-          {content.fileIds && content.fileIds.length > 0 && (
-            <div className="px-4 md:px-6 py-4 border-t border-gray-200 bg-gray-50">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Tệp đính kèm ({content.fileIds.length})</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {content.fileIds.map((fileId) => (
-                  <a
-                    key={fileId}
-                    href={fileService.getStreamUrl(fileId)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-primary-300 hover:shadow-md transition-all group"
+        {/* Meta Information */}
+        <Descriptions 
+          bordered 
+          column={{ xs: 1, sm: 2, md: 2 }}
+          size="small"
+          labelStyle={{ fontWeight: 500, width: '120px' }}
+        >
+          <Descriptions.Item label="Loại">
+            <Tag color="blue">{content.contentType}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label="Trạng thái">
+            <Tag color={content.status === 'Published' ? 'green' : content.status === 'Draft' ? 'orange' : 'default'}>
+              {content.status}
+            </Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label="Ngày tạo">
+            <Space>
+              <CalendarOutlined style={{ color: '#8c8c8c' }} />
+              <Text>{dayjs(content.createdAt).format('DD/MM/YYYY HH:mm')}</Text>
+            </Space>
+          </Descriptions.Item>
+          {content.updatedAt && (
+            <Descriptions.Item label="Ngày cập nhật">
+              <Space>
+                <CalendarOutlined style={{ color: '#8c8c8c' }} />
+                <Text>{dayjs(content.updatedAt).format('DD/MM/YYYY HH:mm')}</Text>
+              </Space>
+            </Descriptions.Item>
+          )}
+          {content.publishedAt && (
+            <Descriptions.Item label="Ngày xuất bản" span={2}>
+              <Space>
+                <CalendarOutlined style={{ color: '#52c41a' }} />
+                <Text type="success">
+                  {dayjs(content.publishedAt).format('DD/MM/YYYY HH:mm')}
+                </Text>
+              </Space>
+            </Descriptions.Item>
+          )}
+          {content.createdBy && (
+            <Descriptions.Item label="Người tạo" span={2}>
+              <Space>
+                <UserOutlined style={{ color: '#8c8c8c' }} />
+                <Tooltip title={content.createdBy}>
+                  <Text 
+                    ellipsis 
+                    style={{ maxWidth: '300px', display: 'inline-block' }}
                   >
-                    <FileText className="h-5 w-5 text-gray-400 group-hover:text-primary-600 transition-colors flex-shrink-0" />
-                    <span className="text-xs text-gray-600 group-hover:text-primary-600 truncate flex-1">
-                      File {fileId.substring(0, 8)}
-                    </span>
-                  </a>
-                ))}
-              </div>
-            </div>
+                    {content.createdBy}
+                  </Text>
+                </Tooltip>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() => copyToClipboard(content.createdBy!, 'ID người tạo')}
+                  style={{ padding: '0 4px' }}
+                />
+              </Space>
+            </Descriptions.Item>
           )}
-        </div>
+          <Descriptions.Item label="Slug" span={2}>
+            <Space style={{ width: '100%' }}>
+              <Tooltip title={content.slug}>
+                <Text 
+                  code 
+                  ellipsis 
+                  style={{ maxWidth: '400px', display: 'inline-block' }}
+                >
+                  {content.slug}
+                </Text>
+              </Tooltip>
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={() => copyToClipboard(content.slug, 'slug')}
+                style={{ padding: '0 4px', flexShrink: 0 }}
+              />
+            </Space>
+          </Descriptions.Item>
+          <Descriptions.Item label="ID" span={2}>
+            <Space style={{ width: '100%' }}>
+              <Tooltip title={content.id}>
+                <Text 
+                  code 
+                  ellipsis 
+                  style={{ maxWidth: '400px', display: 'inline-block', fontSize: '12px' }}
+                >
+                  {content.id}
+                </Text>
+              </Tooltip>
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={() => copyToClipboard(content.id, 'ID')}
+                style={{ padding: '0 4px', flexShrink: 0 }}
+              />
+            </Space>
+          </Descriptions.Item>
+        </Descriptions>
 
-        {/* Footer Actions */}
-        <div className="border-t border-gray-200 bg-gray-50 px-4 md:px-6 py-4 flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <span>ID: {content.id}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {onEdit && (
-              <button
-                onClick={() => onEdit(content)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 active:bg-primary-800 transition-colors touch-manipulation"
-              >
-                <Edit className="h-4 w-4" />
-                <span>Chỉnh sửa</span>
-              </button>
-            )}
-            {onDelete && (
-              <button
-                onClick={() => onDelete(content.id)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 active:bg-red-800 transition-colors touch-manipulation"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span>Xóa</span>
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 active:bg-gray-400 transition-colors touch-manipulation"
-            >
-              Đóng
-            </button>
-          </div>
-        </div>
-      </div>
+        {/* Body Content */}
+        <Card
+          title={
+            <Space>
+              <FileTextOutlined />
+              <span>Nội dung</span>
+            </Space>
+          }
+          extra={
+            content.body && (
+              <Space size="small">
+                {isReading ? (
+                  <>
+                    <Button
+                      icon={isPaused ? <SoundOutlined /> : <PauseCircleOutlined />}
+                      onClick={togglePause}
+                      size="small"
+                    >
+                      {isPaused ? 'Tiếp tục' : 'Tạm dừng'}
+                    </Button>
+                    <Button
+                      icon={<StopOutlined />}
+                      onClick={stopReading}
+                      danger
+                      size="small"
+                    >
+                      Dừng
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    icon={<SoundOutlined />}
+                    onClick={startReading}
+                    type="primary"
+                    size="small"
+                  >
+                    Đọc
+                  </Button>
+                )}
+              </Space>
+            )
+          }
+          style={{ marginBottom: 0 }}
+        >
+          {content.body ? (
+            <div
+              dangerouslySetInnerHTML={{ __html: content.body }}
+              style={{
+                lineHeight: 1.8,
+                color: '#333',
+                wordBreak: 'break-word',
+              }}
+            />
+          ) : (
+            <Text type="secondary" italic>Không có nội dung</Text>
+          )}
+        </Card>
+
+        {/* Attached Files */}
+        {content.fileIds && content.fileIds.length > 0 && (
+          <Card
+            title={
+              <Space>
+                <FileTextOutlined />
+                <span>Tệp đính kèm ({content.fileIds.length})</span>
+              </Space>
+            }
+            style={{ marginBottom: 0 }}
+          >
+            <Space wrap>
+              {content.fileIds.map((fileId) => (
+                <Button
+                  key={fileId}
+                  icon={<FileTextOutlined />}
+                  href={fileService.getStreamUrl(fileId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  size="small"
+                >
+                  File {fileId.substring(0, 8)}
+                </Button>
+              ))}
+            </Space>
+          </Card>
+        )}
+      </Space>
     </div>
   )
 }
-

@@ -126,6 +126,7 @@ export const ROUTES = {
   CONTENT_EDIT: (id: string) => `/content/${id}`,
   USERS: '/users',
   ROLES: '/roles',
+  CHAT: '/chat',
 } as const
 
 // ==================== Storage Keys ====================

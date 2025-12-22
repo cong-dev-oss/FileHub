@@ -1,30 +1,58 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  Table,
+  Button,
+  Input,
+  Space,
+  Typography,
+  Tag,
+  Popconfirm,
+  Modal,
+  Form,
+  Select,
+  Switch,
+  Card,
+  Row,
+  Col,
+  Avatar,
+  Badge,
+  message,
+  Drawer,
+  Divider,
+  Tooltip,
+  Statistic,
+} from 'antd'
+import {
+  UserAddOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SearchOutlined,
+  UserOutlined,
+  SafetyOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  MailOutlined,
+  CalendarOutlined,
+} from '@ant-design/icons'
 import { userService, UserListItem, CreateUserRequest } from '../services/userService'
 import { roleService, Role } from '../services/roleService'
-import { Users, ShieldCheck } from 'lucide-react'
-import toast from 'react-hot-toast'
-import { useConfirm } from '../components/ConfirmDialog'
-import FormField from '../components/FormField'
 import { extractAllErrorMessages } from '../utils/errorHandler'
+import dayjs from 'dayjs'
+
+const { Title, Text } = Typography
+const { Search } = Input
 
 export default function UserManagement() {
   const queryClient = useQueryClient()
-  const confirm = useConfirm()
+  const [form] = Form.useForm()
+  const [searchText, setSearchText] = useState('')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isEditDrawerOpen, setIsEditDrawerOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null)
   const [selectedRoles, setSelectedRoles] = useState<string[]>([])
-  const [userSearch, setUserSearch] = useState('')
-  const [newUser, setNewUser] = useState<CreateUserRequest>({
-    email: '',
-    firstName: '',
-    lastName: '',
-    password: '',
-    confirmPassword: '',
-    roles: [],
-  })
-  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const { data: users = [] } = useQuery({
+  const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: () => userService.getUsers(),
   })
@@ -34,16 +62,31 @@ export default function UserManagement() {
     queryFn: () => roleService.getRoles(),
   })
 
-  const updateRolesMutation = useMutation({
-    mutationFn: (payload: { userId: string; roles: string[] }) =>
-      userService.updateUserRoles(payload.userId, payload.roles),
+  const createUserMutation = useMutation({
+    mutationFn: (payload: CreateUserRequest) => userService.createUser(payload),
     onSuccess: () => {
-      toast.success('User roles updated')
+      message.success('Tạo user thành công!')
+      setIsCreateModalOpen(false)
+      form.resetFields()
       queryClient.invalidateQueries({ queryKey: ['users'] })
     },
     onError: (error: any) => {
       const errorMessages = extractAllErrorMessages(error)
-      errorMessages.forEach((msg) => toast.error(msg))
+      errorMessages.forEach((msg) => message.error(msg))
+    },
+  })
+
+  const updateRolesMutation = useMutation({
+    mutationFn: (payload: { userId: string; roles: string[] }) =>
+      userService.updateUserRoles(payload.userId, payload.roles),
+    onSuccess: () => {
+      message.success('Cập nhật roles thành công!')
+      setIsEditDrawerOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
+    onError: (error: any) => {
+      const errorMessages = extractAllErrorMessages(error)
+      errorMessages.forEach((msg) => message.error(msg))
     },
   })
 
@@ -51,459 +94,547 @@ export default function UserManagement() {
     mutationFn: (payload: { userId: string; isActive: boolean }) =>
       userService.updateUserStatus(payload.userId, payload.isActive),
     onSuccess: () => {
-      toast.success('User status updated')
+      message.success('Cập nhật trạng thái thành công!')
       queryClient.invalidateQueries({ queryKey: ['users'] })
     },
     onError: (error: any) => {
       const errorMessages = extractAllErrorMessages(error)
-      errorMessages.forEach((msg) => toast.error(msg))
+      errorMessages.forEach((msg) => message.error(msg))
     },
   })
 
   const deleteUserMutation = useMutation({
     mutationFn: (userId: string) => userService.deleteUser(userId),
     onSuccess: () => {
-      toast.success('User deleted')
-      setSelectedUser(null)
-      setSelectedRoles([])
+      message.success('Xóa user thành công!')
       queryClient.invalidateQueries({ queryKey: ['users'] })
     },
     onError: (error: any) => {
       const errorMessages = extractAllErrorMessages(error)
-      errorMessages.forEach((msg) => toast.error(msg))
+      errorMessages.forEach((msg) => message.error(msg))
     },
   })
 
-  const createUserMutation = useMutation({
-    mutationFn: (payload: CreateUserRequest) => userService.createUser(payload),
-    onSuccess: () => {
-      toast.success('User created')
-      setNewUser({ email: '', firstName: '', lastName: '', password: '', confirmPassword: '', roles: [] })
-      setErrors({})
-      queryClient.invalidateQueries({ queryKey: ['users'] })
-    },
-    onError: (error: any) => {
-      const errorMessages = extractAllErrorMessages(error)
-      // Show all validation errors
-      errorMessages.forEach((msg) => toast.error(msg))
-      
-      // Also set form errors for better UX
-      if (error.response?.data?.errors) {
-        const formErrors: Record<string, string> = {}
-        const errorData = error.response.data.errors
-        
-        // Map errors to form fields
-        Object.keys(errorData).forEach((key) => {
-          if (Array.isArray(errorData[key]) && errorData[key].length > 0) {
-            // Map common error keys to form fields
-            const fieldMap: Record<string, string> = {
-              'General': 'general',
-              'Password': 'password',
-              'Email': 'email',
-              'FirstName': 'firstName',
-              'LastName': 'lastName',
-            }
-            const fieldName = fieldMap[key] || key.toLowerCase()
-            formErrors[fieldName] = errorData[key][0]
-          }
-        })
-        
-        setErrors(formErrors)
-      }
-    },
-  })
+  const handleCreateUser = async (values: any) => {
+    const payload: CreateUserRequest = {
+      email: values.email,
+      firstName: values.firstName,
+      lastName: values.lastName || '',
+      password: values.password,
+      confirmPassword: values.confirmPassword,
+      roles: values.roles || [],
+    }
+    createUserMutation.mutate(payload)
+  }
 
-  const onSelectUser = (user: UserListItem) => {
+  const handleEditUser = (user: UserListItem) => {
     setSelectedUser(user)
     setSelectedRoles(user.roles)
+    setIsEditDrawerOpen(true)
   }
 
-  const toggleRole = (roleName: string) => {
-    setSelectedRoles(prev =>
-      prev.includes(roleName) ? prev.filter(r => r !== roleName) : [...prev, roleName]
-    )
-  }
-
-  const onSaveRoles = () => {
+  const handleSaveRoles = () => {
     if (!selectedUser) return
     updateRolesMutation.mutate({ userId: selectedUser.id, roles: selectedRoles })
   }
 
-  const onToggleActive = (user: UserListItem) => {
+  const handleToggleStatus = (user: UserListItem) => {
     updateStatusMutation.mutate({ userId: user.id, isActive: !user.isActive })
   }
 
-  const toggleNewUserRole = (roleName: string) => {
-    setNewUser(prev => ({
-      ...prev,
-      roles: prev.roles.includes(roleName)
-        ? prev.roles.filter(r => r !== roleName)
-        : [...prev.roles, roleName],
-    }))
-  }
-
-  const validateField = (name: string, value: string): string => {
-    switch (name) {
-      case 'email':
-        if (!value.trim()) return 'Email is required'
-        if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value)) {
-          return 'Invalid email address'
-        }
-        return ''
-      case 'firstName':
-        if (!value.trim()) return 'First name is required'
-        return ''
-      case 'password':
-        if (!value) return 'Password is required'
-        if (value.length < 6) return 'Password must be at least 6 characters'
-        return ''
-      case 'confirmPassword':
-        if (!value) return 'Confirm password is required'
-        if (value !== newUser.password) return 'Passwords do not match'
-        return ''
-      default:
-        return ''
-    }
-  }
-
-  const handleFieldChange = (field: keyof CreateUserRequest, value: string) => {
-    setNewUser(prev => ({ ...prev, [field]: value }))
-    // Clear error khi user bắt đầu nhập lại
-    if (errors[field]) {
-      setErrors(prev => {
-        const newErrors = { ...prev }
-        delete newErrors[field]
-        return newErrors
-      })
-    }
-    // Validate confirmPassword khi password thay đổi
-    if (field === 'password' && newUser.confirmPassword) {
-      const confirmError = validateField('confirmPassword', newUser.confirmPassword)
-      setErrors(prev => {
-        const newErrors = { ...prev }
-        if (confirmError) {
-          newErrors.confirmPassword = confirmError
-        } else {
-          delete newErrors.confirmPassword
-        }
-        return newErrors
-      })
-    }
-  }
-
-  const handleFieldBlur = (field: keyof CreateUserRequest) => {
-    const value = newUser[field] as string
-    const error = validateField(field, value)
-    if (error) {
-      setErrors(prev => ({ ...prev, [field]: error }))
-    }
-  }
-
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {}
-    
-    const emailError = validateField('email', newUser.email)
-    if (emailError) newErrors.email = emailError
-
-    const firstNameError = validateField('firstName', newUser.firstName)
-    if (firstNameError) newErrors.firstName = firstNameError
-
-    const passwordError = validateField('password', newUser.password)
-    if (passwordError) newErrors.password = passwordError
-
-    const confirmPasswordError = validateField('confirmPassword', newUser.confirmPassword)
-    if (confirmPasswordError) newErrors.confirmPassword = confirmPasswordError
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const onCreateUser = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!validateForm()) {
-      toast.error('Vui lòng kiểm tra lại thông tin đã nhập')
-      return
-    }
-    createUserMutation.mutate(newUser)
-  }
-
-  const filteredUsers = users.filter((u) => {
-    if (!userSearch.trim()) return true
-    const keyword = userSearch.toLowerCase()
+  const filteredUsers = users.filter((user) => {
+    if (!searchText.trim()) return true
+    const keyword = searchText.toLowerCase()
     return (
-      u.email.toLowerCase().includes(keyword) ||
-      `${u.firstName} ${u.lastName}`.toLowerCase().includes(keyword)
+      user.email.toLowerCase().includes(keyword) ||
+      user.firstName.toLowerCase().includes(keyword) ||
+      user.lastName.toLowerCase().includes(keyword) ||
+      user.roles.some((role) => role.toLowerCase().includes(keyword))
     )
   })
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <Users className="h-7 w-7 text-primary-600" />
-            User Management
-          </h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Quản lý tài khoản người dùng, thông tin cơ bản và nhóm quyền (roles).
-          </p>
-        </div>
-      </div>
+  const activeUsersCount = users.filter((u) => u.isActive).length
+  const inactiveUsersCount = users.length - activeUsersCount
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* User list */}
-        <div className="bg-white rounded-lg shadow p-4 lg:col-span-1">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-900">Users</h2>
-            <span className="text-xs text-gray-400">
-              {users.length} user{users.length !== 1 ? 's' : ''}
-            </span>
+  const columns = [
+    {
+      title: 'Người dùng',
+      key: 'user',
+      render: (_: any, record: UserListItem) => (
+        <Space>
+          <Avatar
+            style={{
+              backgroundColor: record.isActive ? '#52c41a' : '#ff4d4f',
+            }}
+            icon={<UserOutlined />}
+          >
+            {record.firstName[0]?.toUpperCase()}
+            {record.lastName[0]?.toUpperCase()}
+          </Avatar>
+          <div>
+            <div>
+              <Text strong>{record.firstName} {record.lastName}</Text>
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                <MailOutlined style={{ marginRight: 4 }} />
+                {record.email}
+              </Text>
+            </div>
           </div>
-
-          <div className="mb-3">
-            <input
-              type="text"
-              placeholder="Tìm theo tên hoặc email..."
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
+        </Space>
+      ),
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'isActive',
+      key: 'status',
+      width: 120,
+      render: (isActive: boolean, record: UserListItem) => (
+        <Tooltip title={isActive ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}>
+          <Badge
+            status={isActive ? 'success' : 'error'}
+            text={
+              <Tag
+                color={isActive ? 'success' : 'error'}
+                icon={isActive ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+              >
+                {isActive ? 'Active' : 'Inactive'}
+              </Tag>
+            }
+          />
+        </Tooltip>
+      ),
+    },
+    {
+      title: 'Roles',
+      dataIndex: 'roles',
+      key: 'roles',
+      render: (roles: string[]) => (
+        <Space wrap>
+          {roles.length > 0 ? (
+            roles.map((role) => (
+              <Tag key={role} color="blue" icon={<SafetyOutlined />}>
+                {role}
+              </Tag>
+            ))
+          ) : (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Chưa có role
+            </Text>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: 'Ngày tạo',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 150,
+      render: (date: string) => (
+        <Space>
+          <CalendarOutlined />
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {dayjs(date).format('DD/MM/YYYY')}
+          </Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Thao tác',
+      key: 'actions',
+      width: 200,
+      render: (_: any, record: UserListItem) => (
+        <Space>
+          <Tooltip title="Chỉnh sửa roles">
+            <Button
+              type="primary"
+              icon={<EditOutlined />}
+              size="small"
+              onClick={() => handleEditUser(record)}
+            >
+              Sửa
+            </Button>
+          </Tooltip>
+          <Tooltip title={record.isActive ? 'Vô hiệu hóa' : 'Kích hoạt'}>
+            <Switch
+              checked={record.isActive}
+              onChange={() => handleToggleStatus(record)}
+              checkedChildren={<CheckCircleOutlined />}
+              unCheckedChildren={<CloseCircleOutlined />}
             />
-          </div>
+          </Tooltip>
+          <Popconfirm
+            title="Xóa user"
+            description={`Bạn có chắc chắn muốn xóa user "${record.email}"?`}
+            onConfirm={() => deleteUserMutation.mutate(record.id)}
+            okText="Xóa"
+            cancelText="Hủy"
+            okButtonProps={{ danger: true }}
+          >
+            <Tooltip title="Xóa user">
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                size="small"
+              >
+                Xóa
+              </Button>
+            </Tooltip>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
 
-          <div className="border border-gray-100 rounded-md max-h-[480px] overflow-y-auto divide-y divide-gray-100">
-            {filteredUsers.length === 0 ? (
-              <div className="px-3 py-6 text-sm text-gray-500 text-center">
-                Không tìm thấy user phù hợp.
-              </div>
-            ) : (
-              filteredUsers.map(user => (
-                <div
-                  key={user.id}
-                  className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${
-                    selectedUser?.id === user.id ? 'bg-primary-50' : 'bg-white hover:bg-gray-50'
-                  }`}
-                  onClick={() => onSelectUser(user)}
-                >
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">
-                      {user.firstName} {user.lastName || ''}
-                    </div>
-                    <div className="text-xs text-gray-500">{user.email}</div>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {user.roles.map(role => (
-                        <span
-                          key={role}
-                          className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700"
-                        >
-                          {role}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    onClick={e => {
-                      e.stopPropagation()
-                      onToggleActive(user)
-                    }}
-                    className={`text-xs px-2 py-1 rounded-md ${
-                      user.isActive
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}
-                  >
-                    {user.isActive ? 'Active' : 'Inactive'}
-                  </button>
-                </div>
-              ))
-            )}
+  return (
+    <div style={{ background: '#fff', padding: 24, borderRadius: 8, minHeight: '100%' }}>
+      <Space orientation="vertical" size="large" style={{ width: '100%' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <Title level={2} style={{ marginBottom: 8 }}>
+              <UserOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+              Quản lý Người dùng
+            </Title>
+            <Text type="secondary">
+              Quản lý tài khoản người dùng, phân quyền và trạng thái hoạt động
+            </Text>
           </div>
+          <Button
+            type="primary"
+            icon={<UserAddOutlined />}
+            size="large"
+            onClick={() => setIsCreateModalOpen(true)}
+          >
+            Tạo User mới
+          </Button>
         </div>
 
-        {/* Tạo user mới */}
-        <div className="bg-white rounded-lg shadow p-4 lg:col-span-1">
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Create User</h2>
-          <p className="text-xs text-gray-500 mb-3">
-            Nhập thông tin cơ bản và nhóm quyền ban đầu cho user mới.
-          </p>
-          <form className="space-y-3" onSubmit={onCreateUser}>
-            <FormField
+        {/* Statistics */}
+        <Row gutter={16}>
+          <Col xs={24} sm={8}>
+            <Card>
+              <Statistic
+                title="Tổng số Users"
+                value={users.length}
+                prefix={<UserOutlined />}
+                valueStyle={{ color: '#1890ff' }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={8}>
+            <Card>
+              <Statistic
+                title="Users đang hoạt động"
+                value={activeUsersCount}
+                prefix={<CheckCircleOutlined />}
+                styles={{ content: { color: '#52c41a' } }}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={8}>
+            <Card>
+              <Statistic
+                title="Users đã vô hiệu hóa"
+                value={inactiveUsersCount}
+                prefix={<CloseCircleOutlined />}
+                styles={{ content: { color: '#ff4d4f' } }}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        {/* Search and Filters */}
+        <Card>
+          <Space orientation="vertical" style={{ width: '100%' }} size="middle">
+            <Search
+              placeholder="Tìm kiếm theo tên, email hoặc role..."
+              allowClear
+              enterButton={<SearchOutlined />}
+              size="large"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </Space>
+        </Card>
+
+        {/* Users Table */}
+        <Card>
+          <Table
+            columns={columns}
+            dataSource={filteredUsers}
+            rowKey="id"
+            loading={isLoading}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (total) => `Tổng ${total} users`,
+              pageSizeOptions: ['10', '20', '50', '100'],
+            }}
+            locale={{
+              emptyText: 'Không có users nào',
+            }}
+          />
+        </Card>
+
+        {/* Create User Modal */}
+        <Modal
+          title={
+            <Space>
+              <UserAddOutlined />
+              <span>Tạo User mới</span>
+            </Space>
+          }
+          open={isCreateModalOpen}
+          onCancel={() => {
+            setIsCreateModalOpen(false)
+            form.resetFields()
+          }}
+          footer={null}
+          width={600}
+        >
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleCreateUser}
+            autoComplete="off"
+          >
+            <Form.Item
               name="email"
               label="Email"
-              type="email"
-              required
-              placeholder="user@example.com"
-              value={newUser.email}
-              error={errors.email}
-              onChange={e => handleFieldChange('email', (e.target as HTMLInputElement).value)}
-              onBlur={() => handleFieldBlur('email')}
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                name="firstName"
-                label="First name"
-                type="text"
-                required
-                placeholder="Enter first name"
-                value={newUser.firstName}
-                error={errors.firstName}
-                onChange={e => handleFieldChange('firstName', (e.target as HTMLInputElement).value)}
-                onBlur={() => handleFieldBlur('firstName')}
-              />
-              <FormField
-                name="lastName"
-                label="Last name"
-                type="text"
-                placeholder="Enter last name"
-                value={newUser.lastName}
-                error={errors.lastName}
-                onChange={e => handleFieldChange('lastName', (e.target as HTMLInputElement).value)}
-              />
-            </div>
-            <FormField
-              name="password"
-              label="Password"
-              type="password"
-              required
-              placeholder="Tối thiểu 6 ký tự"
-              value={newUser.password}
-              error={errors.password}
-              onChange={e => handleFieldChange('password', (e.target as HTMLInputElement).value)}
-              onBlur={() => handleFieldBlur('password')}
-            />
-            <FormField
-              name="confirmPassword"
-              label="Confirm password"
-              type="password"
-              required
-              placeholder="Nhập lại password"
-              value={newUser.confirmPassword}
-              error={errors.confirmPassword}
-              onChange={e => handleFieldChange('confirmPassword', (e.target as HTMLInputElement).value)}
-              onBlur={() => handleFieldBlur('confirmPassword')}
-            />
-
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Roles</label>
-              <div className="border border-gray-200 rounded-md max-h-32 overflow-y-auto divide-y divide-gray-100">
-                {roles.map((role: Role) => (
-                  <label
-                    key={role.id}
-                    className="flex items-center justify-between px-3 py-1.5 text-xs cursor-pointer hover:bg-gray-50"
-                  >
-                    <span className="text-gray-700">{role.name}</span>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 text-primary-600 border-gray-300 rounded"
-                      checked={newUser.roles.includes(role.name)}
-                      onChange={() => toggleNewUserRole(role.name)}
-                    />
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={createUserMutation.isPending}
-              className="w-full inline-flex justify-center items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm disabled:opacity-50"
+              rules={[
+                { required: true, message: 'Vui lòng nhập email!' },
+                { type: 'email', message: 'Email không hợp lệ!' },
+              ]}
             >
-              {createUserMutation.isPending ? 'Creating...' : 'Create User'}
-            </button>
-          </form>
-        </div>
+              <Input
+                prefix={<MailOutlined />}
+                placeholder="user@example.com"
+                size="large"
+              />
+            </Form.Item>
 
-        {/* Thông tin & roles của user đã chọn */}
-        <div className="bg-white rounded-lg shadow p-4 lg:col-span-1">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">User Detail & Roles</h2>
-              {selectedUser ? (
-                <div className="text-sm text-gray-500 space-y-1">
-                  <div className="font-medium text-gray-800">
-                    {selectedUser.firstName} {selectedUser.lastName}
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="firstName"
+                  label="Họ"
+                  rules={[{ required: true, message: 'Vui lòng nhập họ!' }]}
+                >
+                  <Input placeholder="Nhập họ" size="large" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="lastName"
+                  label="Tên"
+                >
+                  <Input placeholder="Nhập tên" size="large" />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item
+              name="password"
+              label="Mật khẩu"
+              rules={[
+                { required: true, message: 'Vui lòng nhập mật khẩu!' },
+                { min: 6, message: 'Mật khẩu phải có ít nhất 6 ký tự!' },
+              ]}
+            >
+              <Input.Password placeholder="Tối thiểu 6 ký tự" size="large" />
+            </Form.Item>
+
+            <Form.Item
+              name="confirmPassword"
+              label="Xác nhận mật khẩu"
+              dependencies={['password']}
+              rules={[
+                { required: true, message: 'Vui lòng xác nhận mật khẩu!' },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue('password') === value) {
+                      return Promise.resolve()
+                    }
+                    return Promise.reject(new Error('Mật khẩu không khớp!'))
+                  },
+                }),
+              ]}
+            >
+              <Input.Password placeholder="Nhập lại mật khẩu" size="large" />
+            </Form.Item>
+
+            <Form.Item
+              name="roles"
+              label="Roles"
+            >
+              <Select
+                mode="multiple"
+                placeholder="Chọn roles"
+                size="large"
+                options={roles.map((role) => ({
+                  label: role.name,
+                  value: role.name,
+                }))}
+              />
+            </Form.Item>
+
+            <Form.Item>
+              <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+                <Button onClick={() => {
+                  setIsCreateModalOpen(false)
+                  form.resetFields()
+                }}>
+                  Hủy
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={createUserMutation.isPending}
+                  icon={<UserAddOutlined />}
+                >
+                  Tạo User
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* Edit User Roles Drawer */}
+        <Drawer
+          title={
+            <Space>
+              <SafetyOutlined />
+              <span>Quản lý Roles cho User</span>
+            </Space>
+          }
+          placement="right"
+          onClose={() => {
+            setIsEditDrawerOpen(false)
+            setSelectedUser(null)
+            setSelectedRoles([])
+          }}
+          open={isEditDrawerOpen}
+          size="default"
+          styles={{ body: { width: 400 } }}
+          extra={
+            <Space>
+              <Button onClick={() => setIsEditDrawerOpen(false)}>
+                Hủy
+              </Button>
+              <Button
+                type="primary"
+                onClick={handleSaveRoles}
+                loading={updateRolesMutation.isPending}
+                icon={<SafetyOutlined />}
+              >
+                Lưu Roles
+              </Button>
+            </Space>
+          }
+        >
+          {selectedUser && (
+            <Space orientation="vertical" size="large" style={{ width: '100%' }}>
+              <div>
+                <Space>
+                  <Avatar
+                    size={64}
+                    style={{
+                      backgroundColor: selectedUser.isActive ? '#52c41a' : '#ff4d4f',
+                    }}
+                    icon={<UserOutlined />}
+                  >
+                    {selectedUser.firstName[0]?.toUpperCase()}
+                    {selectedUser.lastName[0]?.toUpperCase()}
+                  </Avatar>
+                  <div>
+                    <Title level={4} style={{ margin: 0 }}>
+                      {selectedUser.firstName} {selectedUser.lastName}
+                    </Title>
+                    <Text type="secondary">
+                      <MailOutlined style={{ marginRight: 4 }} />
+                      {selectedUser.email}
+                    </Text>
+                    <div style={{ marginTop: 8 }}>
+                      <Tag
+                        color={selectedUser.isActive ? 'success' : 'error'}
+                        icon={selectedUser.isActive ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+                      >
+                        {selectedUser.isActive ? 'Active' : 'Inactive'}
+                      </Tag>
+                    </div>
                   </div>
-                  <div>{selectedUser.email}</div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span
-                      className={`px-2 py-0.5 rounded-full ${
-                        selectedUser.isActive
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
+                </Space>
+              </div>
+
+              <Divider />
+
+              <div>
+                <Title level={5}>Chọn Roles</Title>
+                <Space orientation="vertical" style={{ width: '100%' }} size="small">
+                  {roles.map((role) => (
+                    <Card
+                      key={role.id}
+                      size="small"
+                      hoverable
+                      style={{
+                        border: selectedRoles.includes(role.name)
+                          ? '2px solid #1890ff'
+                          : '1px solid #d9d9d9',
+                        backgroundColor: selectedRoles.includes(role.name)
+                          ? '#e6f7ff'
+                          : '#fff',
+                      }}
+                      onClick={() => {
+                        setSelectedRoles((prev) =>
+                          prev.includes(role.name)
+                            ? prev.filter((r) => r !== role.name)
+                            : [...prev, role.name]
+                        )
+                      }}
                     >
-                      {selectedUser.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                    {selectedUser.roles.map(role => (
-                      <span
+                      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                        <Space>
+                          <SafetyOutlined />
+                          <Text strong={selectedRoles.includes(role.name)}>
+                            {role.name}
+                          </Text>
+                        </Space>
+                        {selectedRoles.includes(role.name) && (
+                          <CheckCircleOutlined style={{ color: '#1890ff' }} />
+                        )}
+                      </Space>
+                    </Card>
+                  ))}
+                </Space>
+              </div>
+
+              {selectedRoles.length > 0 && (
+                <div>
+                  <Divider />
+                  <Title level={5}>Roles đã chọn ({selectedRoles.length})</Title>
+                  <Space wrap>
+                    {selectedRoles.map((role) => (
+                      <Tag
                         key={role}
-                        className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"
+                        color="blue"
+                        closable
+                        onClose={() => {
+                          setSelectedRoles((prev) => prev.filter((r) => r !== role))
+                        }}
                       >
                         {role}
-                      </span>
+                      </Tag>
                     ))}
-                  </div>
+                  </Space>
                 </div>
-              ) : (
-                <p className="text-sm text-gray-500">Chọn một user bên trái để gán roles.</p>
               )}
-            </div>
-            {selectedUser && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={onSaveRoles}
-                  disabled={updateRolesMutation.isPending}
-                  className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm disabled:opacity-50"
-                >
-                  <ShieldCheck className="h-4 w-4 mr-2" />
-                  {updateRolesMutation.isPending ? 'Saving...' : 'Save Roles'}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!selectedUser) return
-                    const ok = await confirm({
-                      title: 'Xóa user',
-                      message: `Bạn có chắc chắn muốn xóa user "${selectedUser.email}"? Hành động này không thể hoàn tác.`,
-                      confirmText: 'Xóa user',
-                    })
-                    if (ok) {
-                      deleteUserMutation.mutate(selectedUser.id)
-                    }
-                  }}
-                  className="inline-flex items-center px-3 py-2 bg-red-50 text-red-600 rounded-md hover:bg-red-100 text-xs"
-                >
-                  Delete
-                </button>
-              </div>
-            )}
-          </div>
-
-          {!selectedUser ? (
-            <div className="text-sm text-gray-500">
-              Chưa chọn user. Chọn một user bên trái để xem chi tiết và gán quyền.
-            </div>
-          ) : (
-            <div className="mt-3 space-y-2 max-h-[360px] overflow-y-auto pr-1">
-              {roles.map((role: Role) => (
-                <label
-                  key={role.id}
-                  className="flex items-center justify-between px-3 py-2 border border-gray-100 rounded-md cursor-pointer hover:bg-gray-50"
-                >
-                  <span className="text-sm text-gray-800">{role.name}</span>
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 text-primary-600 border-gray-300 rounded"
-                    checked={selectedRoles.includes(role.name)}
-                    onChange={() => toggleRole(role.name)}
-                  />
-                </label>
-              ))}
-            </div>
+            </Space>
           )}
-        </div>
-      </div>
+        </Drawer>
+      </Space>
     </div>
   )
 }
-
-

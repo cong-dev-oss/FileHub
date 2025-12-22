@@ -225,8 +225,51 @@ export default function Content() {
         title="Chi tiết nội dung"
         open={!!viewingContentId}
         onCancel={() => setViewingContentId(null)}
-        footer={null}
-        width={800}
+        footer={
+          viewingContentId ? (
+            <Space>
+              {(() => {
+                const content = contents.find(c => c.id === viewingContentId)
+                return (
+                  <>
+                    <Button
+                      type="primary"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        setViewingContentId(null)
+                        navigate(`/content/${viewingContentId}`)
+                      }}
+                    >
+                      Chỉnh sửa
+                    </Button>
+                    <Popconfirm
+                      title="Xóa nội dung"
+                      description={`Bạn có chắc chắn muốn xóa "${content?.title}"?`}
+                      onConfirm={() => {
+                        deleteMutation.mutate(viewingContentId)
+                        setViewingContentId(null)
+                      }}
+                      okText="Xóa"
+                      cancelText="Hủy"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <Button danger icon={<DeleteOutlined />}>
+                        Xóa
+                      </Button>
+                    </Popconfirm>
+                    <Button onClick={() => setViewingContentId(null)}>
+                      Đóng
+                    </Button>
+                  </>
+                )
+              })()}
+            </Space>
+          ) : null
+        }
+        width={900}
+        styles={{
+          body: { maxHeight: '70vh', overflowY: 'auto' }
+        }}
       >
         {viewingContentId && (
           <ContentDetail

@@ -16,6 +16,7 @@ import Content from '../pages/Content'
 import ContentEditor from '../pages/ContentEditor'
 import UserManagement from '../pages/UserManagement'
 import RoleManagement from '../pages/RoleManagement'
+import Chat from '../pages/Chat'
 
 // Components
 import Layout from '../components/Layout'
@@ -47,6 +48,7 @@ export default function AppRoutes() {
         <Route path="content" element={<Content />} />
         <Route path="content/new" element={<ContentEditor />} />
         <Route path="content/:id" element={<ContentEditor />} />
+        <Route path="chat" element={<Chat />} />
         
         {/* Admin Routes */}
         <Route

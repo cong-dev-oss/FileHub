@@ -18,6 +18,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
+// Add HttpClient for external API calls
+builder.Services.AddHttpClient();
+
 // Swagger configuration
 builder.Services.AddSwaggerGen(c =>
 {
@@ -103,6 +106,23 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"] ?? "WebAppUsers",
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
     };
+    
+    // Configure SignalR JWT authentication
+    options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+            
+            return Task.CompletedTask;
+        }
+    };
 });
 
 // CORS configuration - Allow video streaming
@@ -135,10 +155,14 @@ builder.Services.Scan(scan => scan
     .WithScopedLifetime());
 
 // SignalR for WebSocket notifications
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+});
 
-// Background Service for Video Conversion
+// Background Services
 builder.Services.AddHostedService<WebApp.Infrastructure.Services.VideoConversionService>();
+builder.Services.AddHostedService<WebApp.Infrastructure.Services.MessageAutoDeleteJobService>();
 
 // File upload configuration - Support up to 5GB files
 builder.Services.Configure<FormOptions>(options =>
@@ -180,8 +204,9 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// SignalR Hub for WebSocket notifications
+// SignalR Hubs for WebSocket notifications
 app.MapHub<WebApp.Infrastructure.Hubs.VideoConversionHub>("/hubs/video-conversion");
+app.MapHub<WebApp.Infrastructure.Hubs.ChatHub>("/hubs/chat");
 
 // Initialize database and seed default data
 _ = Task.Run(async () =>

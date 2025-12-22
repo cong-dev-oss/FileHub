@@ -135,7 +135,7 @@ Swagger UI: `https://localhost:5001/swagger`
 
 Khi ứng dụng khởi động lần đầu, một tài khoản admin mặc định sẽ được tạo tự động:
 
-- **Email**: `admin@webapp.com`
+- **Email**: `  `
 - **Password**: `Admin@123`
 - **Role**: Admin
 

@@ -27,6 +27,11 @@ public class UnitOfWork : IUnitOfWork
     public IRepository<Core.Entities.ContentFile> ContentFiles { get; }
     public IRepository<Core.Entities.VideoConversionJob> VideoConversionJobs { get; }
 
+    public IRepository<T> GetRepository<T>() where T : class
+    {
+        return new Repository<T>(_context);
+    }
+
     public async Task<int> SaveChangesAsync()
     {
         return await _context.SaveChangesAsync();

@@ -10,12 +10,13 @@ import {
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  BellOutlined,
+  MessageOutlined,
 } from '@ant-design/icons'
 import { useAuth } from '../hooks/useAuth'
 import { usePermissions } from '../hooks/usePermissions'
 import { ROUTES } from '../constants'
 import { useState } from 'react'
+import NotificationDropdown from './Chat/NotificationDropdown'
 
 const { Header, Sider, Content } = AntLayout
 const { Text } = Typography
@@ -42,6 +43,11 @@ export default function Layout() {
       key: ROUTES.CONTENT,
       icon: <FileTextOutlined />,
       label: 'Content',
+    },
+    {
+      key: ROUTES.CHAT,
+      icon: <MessageOutlined />,
+      label: 'Chat',
     },
     ...(isAdmin()
       ? [
@@ -180,13 +186,7 @@ export default function Layout() {
           />
 
           <Space size="large">
-            <Badge count={0} showZero={false}>
-              <Button
-                type="text"
-                icon={<BellOutlined style={{ fontSize: 18 }} />}
-                style={{ width: 48, height: 48 }}
-              />
-            </Badge>
+            <NotificationDropdown />
 
             <Dropdown
               menu={{

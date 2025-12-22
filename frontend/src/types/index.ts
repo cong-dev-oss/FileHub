@@ -218,6 +218,141 @@ export interface NavigationItem {
   permissions?: string[]
 }
 
+// ==================== Chat Types ====================
+
+export enum MessageType {
+  Text = 0,
+  Image = 1,
+  File = 2,
+  System = 3
+}
+
+export enum ChatRoomType {
+  Direct = 0,
+  Group = 1,
+  Channel = 2
+}
+
+export enum ChatRoomRole {
+  Member = 0,
+  Admin = 1,
+  Owner = 2
+}
+
+export enum NotificationType {
+  NewMessage = 0,
+  Mention = 1,
+  Reaction = 2,
+  RoomInvite = 3
+}
+
+export interface MessageAttachment {
+  id: string
+  fileName: string
+  filePath: string
+  contentType: string
+  fileSize: number
+}
+
+export interface MessageDto {
+  id: string
+  content: string
+  senderId: string
+  senderName: string
+  senderAvatar?: string
+  chatRoomId?: string
+  receiverId?: string
+  receiverName?: string
+  messageType: MessageType
+  isRead: boolean
+  createdAt: string
+  readAt?: string
+  replyToMessageId?: string
+  replyToMessage?: MessageDto
+  attachments: MessageAttachment[]
+}
+
+export interface ChatRoomMemberDto {
+  id: string
+  userId: string
+  userName: string
+  userAvatar?: string
+  role: ChatRoomRole
+  joinedAt: string
+  isActive: boolean
+}
+
+export interface ChatRoomDto {
+  id: string
+  name: string
+  description?: string
+  roomType: ChatRoomType
+  createdById: string
+  createdByName: string
+  createdAt: string
+  updatedAt?: string
+  unreadCount: number
+  lastMessage?: MessageDto
+  members: ChatRoomMemberDto[]
+}
+
+export interface CreateMessageDto {
+  content: string
+  chatRoomId?: string
+  receiverId?: string
+  messageType?: MessageType
+  attachments?: CreateAttachmentDto[]
+  replyToMessageId?: string
+}
+
+export interface CreateAttachmentDto {
+  fileName: string
+  filePath: string
+  contentType: string
+  fileSize: number
+}
+
+export interface CreateChatRoomDto {
+  name: string
+  description?: string
+  roomType: ChatRoomType
+  memberIds: string[]
+}
+
+export interface MessageNotificationDto {
+  id: string
+  messageId: string
+  userId: string
+  type: NotificationType
+  isRead: boolean
+  createdAt: string
+  message?: MessageDto
+}
+
+export enum AutoDeletePeriod {
+  Never = 0,
+  Hours = 1,
+  Days = 2,
+  Weeks = 3,
+  Months = 4
+}
+
+export interface MessageAutoDeleteSettingDto {
+  id: string
+  userId: string
+  isEnabled: boolean
+  period: AutoDeletePeriod
+  periodValue?: number
+  createdAt: string
+  updatedAt?: string
+}
+
+export interface CreateMessageAutoDeleteSettingDto {
+  isEnabled: boolean
+  period: AutoDeletePeriod
+  periodValue?: number
+}
+
 // ==================== Route Types ====================
 
 export interface RouteConfig {

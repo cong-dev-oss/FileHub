@@ -20,17 +20,17 @@ public class UserService : IUserService
         _roleManager = roleManager;
     }
 
-    public async Task<ServiceResult<object>> CreateUserAsync(CreateUserDto dto, string currentUserId)
+    public async Task<ServiceResult<UserListItemDto>> CreateUserAsync(CreateUserDto dto, string currentUserId)
     {
         if (dto.Password != dto.ConfirmPassword)
         {
-            return ServiceResult<object>.Fail("Mật khẩu và xác nhận mật khẩu không khớp");
+            return ServiceResult<UserListItemDto>.Fail("Mật khẩu và xác nhận mật khẩu không khớp");
         }
 
         var existingUser = await _userManager.FindByEmailAsync(dto.Email);
         if (existingUser != null)
         {
-            return ServiceResult<object>.Fail("Email đã được sử dụng");
+            return ServiceResult<UserListItemDto>.Fail("Email đã được sử dụng");
         }
 
         var user = new User
@@ -48,7 +48,7 @@ public class UserService : IUserService
         if (!createResult.Succeeded)
         {
             var errorMessages = createResult.Errors.Select(e => e.Description).ToList();
-            return ServiceResult<object>.Fail(errorMessages);
+            return ServiceResult<UserListItemDto>.Fail(errorMessages);
         }
 
         // Gán roles nếu có
@@ -71,13 +71,26 @@ public class UserService : IUserService
                 if (!roleResult.Succeeded)
                 {
                     var errorMessages = roleResult.Errors.Select(e => e.Description).ToList();
-                    return ServiceResult<object>.Fail(errorMessages);
+                    return ServiceResult<UserListItemDto>.Fail(errorMessages);
                 }
             }
         }
 
-        var response = new { user.Id, user.Email };
-        return ServiceResult<object>.Ok(response);
+        // Get roles for the created user
+        var roles = await _userManager.GetRolesAsync(user);
+
+        var userDto = new UserListItemDto
+        {
+            Id = user.Id,
+            Email = user.Email ?? string.Empty,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            IsActive = user.IsActive,
+            CreatedAt = user.CreatedAt,
+            Roles = roles
+        };
+
+        return ServiceResult<UserListItemDto>.Ok(userDto);
     }
 
     public async Task<ServiceResult<bool>> DeleteUserAsync(string id, string currentUserId)
